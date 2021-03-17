@@ -1,0 +1,335 @@
+---
+title: "Review of Surface Data From FOCB"
+author: "Curtis C. Bohlen, Casco Bay Estuary Partnership"
+date: "2/18/2021"
+output:
+  github_document:
+    toc: true
+    fig_width: 7
+    fig_height: 5
+---
+
+<img
+    src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
+    style="position:absolute;top:10px;right:50px;" />
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.align = 'center',
+                      fig.width = 5, fig.height = 4,
+                      collapse = TRUE, comment = "#>")
+```
+
+# Introduction
+This Notebook reviews contents of the data received from FOCB's 
+"'Citizen Stewards"Surface" data.
+
+This reflects only a small portion of FOCB's monitoring activity.  
+
+Other analyses in this SoCB GitHub repositories look
+in more detail at:  
+1.  "Historical "Citizen Steward" Data from nearly thirty years of monitoring.  
+2.  Continuing sampling conducted at a smaller number of locations by FOCB
+    staff. 
+    
+Analyses in OTHER GitHub archived look into the following:  
+3.  Coastal acidification-related data collection at this same site.   
+4.  Nutrient-related data, especially data on ambient nitrogen concentrations
+    in and around Portland harbor.
+
+# Load Libraries
+```{r load_libraries}
+library(MASS)     # Here for the `boxcox()` function
+library(tidyverse)
+library(readxl)
+
+library(GGally)
+
+library(CBEPgraphics)
+load_cbep_fonts()
+theme_set(theme_cbep())
+```
+
+# Load Data
+## Establish Folder Reference
+```{r folder_refs}
+sibfldnm <- 'Original_Data'
+parent   <- dirname(getwd())
+sibling  <- file.path(parent,sibfldnm)
+
+dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
+```
+
+
+## Primary Data
+We specify column names because FOCB data has a row of names, a row of units,
+then the data.  This approach is simpler than reading names from the first
+row and correcting them to be R syntactic names.
+```{r load_data, warning = FALSE}
+fn    <- 'FOCB Surface All Current Sites With BSV Data.xlsx'
+fpath <- file.path(sibling,fn)
+
+mynames <- c('station', 'dt', 'time', 'sample_depth',
+             'secchi', 'water_depth','temperature', 'salinity',
+             'do', 'pctsat', 'pH', 'chl', 
+             'month', 'year', 'fdom', 'bga', 
+             'turbidity', 'blank', 'clouds', 'wndspd',
+             'winddir'
+             )
+
+the_data <- read_excel(fpath, skip=2, col_names = mynames)
+rm(mynames)
+```
+
+### Remove Data Only Availalbe In 2020
+```{r}
+the_data <- the_data %>%
+select(-c(fdom:winddir))
+```
+
+## Add Station Names
+```{r}
+fn    <- 'FOCB Monitoring Sites.xlsx'
+fpath <- file.path(sibling,fn)
+loc_data <- read_excel(fpath) %>%
+  select(Station_ID, Station_Name) %>%
+  rename(station = Station_ID)
+
+the_data <- the_data %>%
+  left_join(loc_data, by = 'station') %>%
+  rename(station_name = Station_Name) %>%
+  relocate(station_name, .after = station) %>%
+  relocate(year, .after = dt) %>%
+  relocate(month, .after = year)
+```
+
+## Address Censored Secchi Values
+```{r}
+the_data <- the_data %>%
+  mutate(secchi_2 = if_else(secchi == "BSV", water_depth, as.numeric(secchi)),
+         bottom_flag = secchi == "BSV") %>%
+  relocate(secchi_2, .after = secchi) %>%
+  relocate(bottom_flag, .after = secchi_2)
+```
+
+## Create Recent Data
+We filter to the last five FULL years of data, 2015 through 2019.
+```{r}
+recent_data <- the_data %>%
+  filter(year > 2014 & year < 2020) %>%
+  mutate(station = factor(station))
+```
+
+## Create Trend Data
+First, we create a tibble containing information on years in which each
+station was sampled.
+```{r}
+years_data <- the_data %>%
+  group_by(station, year) %>%
+  summarize(yes = ! all(is.na(temperature)),
+            .groups = 'drop_last') %>%
+  summarize(years = sum(yes, na.rm = TRUE),
+            recent_years =  sum(yes & year > 2014, na.rm = TRUE),
+            .groups = 'drop')
+  
+```
+
+Then we identify stations with at least 10 years of data, and at least three
+years of data from the last five years, and use that list to select data for
+trend analysis.
+```{r}
+selected_stations <- years_data %>%
+  filter(years> 9, recent_years >2) %>%
+  pull(station)
+
+trend_data <- the_data %>%
+  filter(station %in% selected_stations)
+rm(selected_stations, years_data)
+```
+
+Two of the  Stations are not in the locations data.  They are:
+"CMS2" and "P6CBI".  "P6CBI" was only sampled one year, in 2006.  CMS3 is a new
+site in 2020, so does not play a role in a retrospective analysis.
+
+# Cross Tabs
+## Prevalence of Stations by Year
+```{r}
+xtabs(~ station + year, data = the_data)
+```
+
+## Prevalence of Parameters by Year
+```{r}
+tmp <- the_data %>%
+  select(-dt, -time, -month, -sample_depth, 
+         -secchi, - bottom_flag) %>%
+  relocate(water_depth, .after = year) %>%
+  pivot_longer(c(secchi_2:chl), names_to = 'parameter', values_to = 'value') %>%
+  filter(! is.na(value)) %>%
+  group_by(parameter)
+
+xtabs(~ year + parameter, data = tmp)
+rm(tmp)
+```
+So note that Chlorophyll data is available going back to 2001, but from 
+relatively few samples until 2018
+
+# Evaluation of Distributions
+## Comment
+We take a look at distributions of the data to help guide analyses.  But it
+should be remembered that in this setting, viewing histograms and qq plots may 
+be misleading, as they are based not on model residuals, but raw observations.
+
+Some parameters, such as salinity, have very different distributions among
+different sites, creating skewed overall distributions based on well understood
+phenomena.  It is possible to have skewed distributions without ending up with 
+skewed residuals.
+
+## Pairs Plot
+```{r fig.width = 8, fig.height = 8}
+the_data %>%
+  select(c(-station, -station_name, 
+           - dt, -time, 
+           -sample_depth, 
+           -secchi,  -bottom_flag,
+           -month, - year)) %>%
+  ggpairs(progress = FALSE)
+```
+
+Most of those variables are decently distributed for normal distribution-based 
+models, although often with heavy tails.
+
+Pairwise relationships are mostly reflections of the complex marine environment.
+That is, low salinity happens inshore, where it is shallow, and water clarity
+and dissolved oxygen both tend to be low. 
+
+Water depth, salinity, and chlorophyll have significant problems with outliers.
+Some of those extremes are related to specific Stations (e.g., deep water; 
+low salinity).
+
+The log transform over transforms many of these parameters.
+It appears to make little difference for dissolved oxygen or pct saturation, and
+clearly helps with chlorophyll.
+
+## QQ Plots of Untransformed and Log-Transformed Data
+```{r fig.width = 6, fig.height = 3}
+oldpar <-  par(mfrow = c(1,2))
+
+for (p in c('secchi_2', 'temperature', 'salinity',
+           'do', 'pctsat', 'pH', 'chl') ) {
+
+qqnorm(the_data[[p]], main = p)
+qqline(the_data[[p]])
+
+l <- the_data[[p]]
+l <- l[l>0]
+l <- log(l)
+
+qqnorm(l, main = paste('log of', p))
+qqline(l)
+}
+par(oldpar)
+  
+  
+```
+All parameters show deviations from normality.  
+
+*  Secchi depth is skewed right, with a long upper tail towards clear water. A 
+   log transform is too strong a transformation, and over corrects, skewing 
+   left.  
+   
+*  Temperature is heavy-tailed, which is not entirely surprising given data
+   collected over the course of the warm season April through October.
+   
+*  Salinity is highly skewed, with a smallish number of very low salinity 
+   observations.  Some are tied to specific locations in river mouths.  Based on 
+   prior analyses, some are probably tied to low salinity events that extend 
+   lower salinity conditions out into much of the Bay.
+   
+*  Dissolved Oxygen is close to normally distributed, with slightly heavy tails.
+
+*  Percent Saturation has significantly heavier tails.
+
+*  pH has a long lower tail.  Low pH events occur, rarely, and they are lower
+   than expected based on a normal distribution.
+
+*  Chlorophyll A is heavily skewed, with a small number of quite extreme high
+   values.  The log transform improves matters, but the resulting distribution
+   still has quite heavy tails.  The heavy tailed distribution suggests careful
+   work may need to look at extreme value distributions, like a Pareto
+   distribution, but that is impractical for the type of models envisioned here.
+
+The only parameter for which the distribution is made clearly more suitable for
+least squares modeling is  chlorophyll A.
+
+## Box Cox Transformations 
+The Box Cox transformation is based on looking at residuals from a linear model.
+in this setting, the "default" linear model includes time of year and
+monitoring Station
+
+The box-cox transformations are of the form:
+$$\frac{Y ^{\lambda} - 1}{\lambda}$$
+
+But often Box Cox analysis is used to evaluate whether a power transform might
+be approximately appropriate.
+
+```{r}
+for (p in c('secchi_2', 'temperature', 'salinity',
+           'do', 'pctsat', 'pH', 'chl') ) {
+  tmp <- the_data[the_data[[p]] > 0,]
+the_lm <- lm(tmp[[p]] ~  tmp$station + tmp$month)
+
+bc = boxcox(the_lm, lambda = seq(-0.5,2, 0.1), ylab = paste('loglik of', p))
+}
+
+rm(tmp)
+
+```
+
+*  Secchi might be variance-stabilized somewhat by a square root transform.
+   There is no obvious scientific justification for a square root transform in 
+   this setting.  
+   
+*  Chlorophyll A might be helped by a log transform.
+
+*   None of the other parameters appear likely to be much helped by response
+    transformations, at least not without getting fairly ad hoc.  While a 
+    Box Cox transformation with Lambda == 1.25 may make statistical sense,
+    for dissolved oxygen, it does not relate to any obvious physical 
+    interpretation.  The value here is largely to remind us that for heavy-tailed
+    distributions, power transformations can be variance stabilizing.
+
+From an aesthetic data analysis point of view, power transformations appear 
+unnecessary in the State of the Bay context, as we do not want to rely closely
+on model assumption, and p values derived from them. Our sample sizes are 
+generally large enough so that normal confidence intervals are likely to perform
+fairly well.  But we probably need to interpret results with humility, and 
+check results with robust methods.
+
+```{r}
+recent_data %>%
+  select(c(-station, -station_name, - dt, -year, -month, -time,
+           -sample_depth, -secchi)) %>%
+  cor(method = 'spearman', use = 'pairwise')
+```
+
+# Secchi Depth Models
+```{r fig.width = 7}
+ggplot(recent_data, aes(water_depth, secchi_2)) +
+  geom_point(aes(color = water_depth - secchi_2 < 0.1)) +
+  geom_abline(slope = 1, intercept = 0, color = 'blue') +
+  xlim(0,10)
+```
+
+We confirmed with Mike Doan, of Friends of Casco Bay that the "BSV" values in
+the raw Secchi data means "Bottom Still Visible".  It indicates that the Secchi 
+disk was on the bottom at the time of sampling.  We explore the implications 
+of this in a separate notebook, "Secchi_Censored_Analysis.Rmd"  The bottom line
+is that the (right) censored Secchi data biases Secchi results meaningfully
+only at the most highly censored sites.
+
+Station               |   Station Code
+----------------------|-------------------
+East End Beach        |   EEB18
+Upper Harraseeket     |   HR4 
+Falmouth Town Landing |   PYC43  
+Upper Fore River      | 	STR54
+
