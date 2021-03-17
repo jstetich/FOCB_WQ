@@ -1,0 +1,771 @@
+---
+title: "Graphic Summaries of of General Water Quality (Sonde) Data From FOCB"
+author: "Curtis C. Bohlen, Casco Bay Estuary Partnership"
+date: "2/18/2021"
+output:
+  github_document:
+    toc: true
+    fig_width: 7
+    fig_height: 5
+---
+
+<img
+    src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
+    style="position:absolute;top:10px;right:50px;" />
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.align = 'center',
+                      fig.width = 5, fig.height = 4,
+                      collapse = TRUE, comment = "#>")
+```
+
+# Introduction
+This Notebook provides graphic summaries of data from Friends of Casco Bay's 
+"CMS1" monitoring location, on Cousins Island, in Casco Bay, Maine.  We focus 
+here on analysis of primary sonde data on temperature, dissolved oxygen, 
+salinity, and chlorophyll A. 
+
+This reflects only a small portion of FOCB's monitoring activity.  
+
+Other analyses in this SoCB GitHub repositories look
+in more detail at:  
+1.  "Historical "Citizen Steward" Data from nearly thirty years of monitoring.  
+2.  Continuing sampling conducted at a smaller number of locations by FOCB
+    staff. 
+    
+Analyses in OTHER GitHub archived look into the following:  
+3.  Coastal acidification-related data collection at this same site.   
+4.  Nutrient-related data, especially data on ambient nitrogen concentrations
+    in and around portland harbor.
+
+
+# Load Libraries
+```{r load_libraries}
+library(tidyverse)
+library(readxl)
+#library(readr)
+
+library(GGally)
+#library(zoo)
+library(lubridate)  # here, for the make_datetime() function
+
+library(CBEPgraphics)
+load_cbep_fonts()
+theme_set(theme_cbep())
+```
+
+
+# Load Data
+## Establish Folder Reference
+```{r folder_refs}
+sibfldnm <- 'Original_Data'
+parent   <- dirname(getwd())
+sibling  <- file.path(parent,sibfldnm)
+
+dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
+```
+
+## Load The Data
+We need to skip  the second row here, which is inconvenient largely because the
+default "guess" of data contents for each column is based on the contents of
+that first row of data.
+
+A solution in an answer to this stack overflow questions 
+https://stackoverflow.com/questions/51673418/how-to-skip-the-second-row-using-readxl) 
+suggests reading in the first row only to generate names, then skip the row of 
+names and the row of units, and read the "REAL" data. Note that we round the 
+timestamp on the data to the nearest hour.
+
+In earlier work, I found some inconsistencies in how daylight savings time was 
+dealt with.
+
+For some reason, excel is not reading in the dates and times correctly.  I have
+to reconstruct the time from components.  I am not certain of the timezone
+setting to read these files in correctly.
+
+### Primary Data
+```{r load_data, warning = FALSE}
+
+fn    <- 'CMS1 Data through 2019.xlsx'
+fpath <- file.path(sibling,fn)
+
+mynames <- read_excel(fpath, sheet = 'Sheet1', n_max = 1, col_names = FALSE)
+mynames <- unname(unlist(mynames[1,]))  # flatten and simplify
+mynames[2] <- 'datetime'               # 
+mynames[4] <- 'depth'                   # Address non-standard names
+mynames[8] <- 'pctsat'
+mynames[18] <- 'omega_a'
+mynames <- tolower(mynames)             # convert all to lower case
+
+the_data <- read_excel(fpath, skip=2, col_names = FALSE)
+names(the_data) <- mynames
+rm(mynames)
+```
+
+We create an independent time stamp based on recorded year, month, day, etc. to
+directly address ambiguities of how dates and times are imported with daylight
+savings time, etc.  The parameter `tz = "America/New_York"` creates a time stamp
+that is tied to local time.  The time stamp under the hood is a numerical value,
+but with this timezone specification, the text form  accounts for local
+daylight savings time.
+```{r create_timestamp}
+the_data <- the_data %>%
+  select(-count)  %>%       # datetime and time contain the same data
+  mutate(dt = make_datetime(year, month, day, hour, 0, tz = "America/New_York")) %>%
+  relocate(c(ta, dic, omega_a) , .after = "pco2") %>%
+  mutate(thedate  = as.Date(dt),
+         doy      = as.numeric(format(dt, format = '%j')),
+         # tstamp   = paste0(year, '/', sprintf("%02d", month), '/',
+         #                   sprintf("%02d", day), ' ', sprintf("%02d", hour)),
+         Month = factor(month, labels = month.abb)) %>%
+  arrange(dt)                # Force data are in chronological order
+```
+
+## Create Long Form Data
+```{r long_data}
+long_data <- the_data %>%
+  pivot_longer(cols= depth:omega_a, names_to='Parameter', values_to = 'Value') %>%
+  mutate(Parameter = factor(Parameter,
+                            levels = c('depth',
+                                       'temperature',
+                                       'salinity',
+                                       'do',
+                                       'pctsat',
+                                       'chl',
+                                       'ph',
+                                       'pco2',
+                                       'ta',
+                                       'dic',
+                                       'omega_a')))
+```
+
+
+## Create Daily Data Sumamries
+```{r daily_data}
+daily_data <- the_data %>%
+  select(-hour, -year, -month, -day, -doy) %>%         # Will recalculate these 
+  group_by(thedate) %>%
+  summarise_at(c("temperature", "salinity", "do", "pctsat", "chl", "ph",
+                 "pco2", "ta", "dic", 'omega_a'),
+               c(avg    = function(x) mean(x, na.rm=TRUE),
+                 med    = function(x) median(x, na.rm=TRUE),
+                 rng    = function(x) {suppressWarnings(max(x, na.rm=TRUE) -
+                                                        min(x, na.rm=TRUE))},
+                iqr  = function(x) IQR(x, na.rm=TRUE),
+                p80r = function(x) {as.numeric(quantile(x, 0.90, na.rm=TRUE) -
+                                               quantile(x, 0.10, na.rm=TRUE))}
+                )) %>%
+  # We recalculate time metrics (has to be outside of `summarise_at()`)
+  mutate(year = as.numeric(format(thedate, format = '%Y')),
+         month  = as.numeric(format(thedate, format = '%m')),
+         day   = as.numeric(format(thedate, format = '%d')),
+         doy  = as.numeric(format(thedate, format = '%j')),
+         Month = factor(month, levels=1:12, labels = month.abb)
+         )
+```
+
+# Exploratory Graphics
+[Back to top](#)
+```{r pairs_plot_1, warning=FALSE}
+the_data %>% 
+  ggpairs(c(4,6,7), progress=FALSE)
+```
+
+```{r pairs_plot_2, warning=FALSE}
+the_data %>% 
+  ggpairs(c(4,5, 8, 10), progress=FALSE)
+```
+
+```{r pairs_plot_3, warning=FALSE}
+the_data %>% 
+  ggpairs(c(4, 5, 6, 9), progress=FALSE)
+```
+
+What jumps out:  
+*  the negative association between temperature and DO.  
+*  Most of the negative association between DO and temperature vanishes when 
+   looking at percent saturation.  
+*  Temperature show strong bimodal distribution, presumably because of winter
+   and summer temperature regimes.  
+*  DO shows weak bimodal structure, but percent saturation does not.  
+*  pH data in negatively correlated with pCO~2~ and temperature.  
+   There is little data at low salinity, but most of it is also low chlorophyll.  
+
+
+
+```{r pairs_plot_4, warning=FALSE}
+the_data %>% 
+  ggpairs(c(4, 6, 8, 10), progress=FALSE)
+```
+*  Mutual temperature dependence of DO and pCO~2~ means those two variables are 
+   correlated.
+
+*  Negative pH to PCO~2~ relationships are fairly robust.
+
+
+```{r pairs_plot_5, warning=FALSE, cache = TRUE}
+the_data %>% ggpairs(c(8, 10:13), progress=FALSE)
+```
+*  Total alkalinity and dissolved inorganic carbon are nearly measuring 
+   the same thing -- no surprise in sea water.
+*  The omega values are tied to those DIC / TA values, more than to either pH or 
+   pCO~2~.
+
+# Summary Statistics
+[Back to top](#)
+```{r summary_stats}
+result <- long_data %>%
+  group_by(Parameter) %>%
+  summarize(Minimum = min(Value, na.rm=TRUE),
+            Median   = median(Value, na.rm=TRUE),
+            Mean     = mean(Value, na.rm=TRUE),
+            Maximum  = max(Value, na.rm=TRUE),
+            SD       = sd(Value, na.rm=TRUE),
+            Sample  = sum(! is.na(Value))) %>%
+  mutate(parm = Parameter,
+         Parameter = c('Depth',
+                      'Temperature',
+                      'Salinity',
+                      'DO (mg/l)',
+                      'Percent Saturation',
+                      'Chlorophyll-a',
+                      'pH (NMS)',
+                      'pCO2',
+                      'Total Alkalinity',
+                      'Dissolved Inorganic Carbon',
+                      'Omega Aragonite'
+                      )) %>%
+  relocate(parm)
+```
+
+```{r}
+knitr::kable(result %>% select(-parm), 
+             digits = c(1,1,2,1,3,2,2,2,2,2,2))
+write.csv(result, 'summarystats_FOCB.csv')
+```
+
+## Monthly Summary Statistics
+This is means **across** years.  This is NOT the same as an estimated monthly
+average, adjusted for year to year variation, imbalances in time of day data was
+collected, etc.  For that, we would need to estimate marginal means from a GAMM.
+We do not pursue that idea in this notebook.
+
+```{r monthly_stats}
+monthly_tbl <- the_data %>%
+  select(datetime, year, Month, temperature, salinity,
+         do, pctsat, chl, ph, pco2, dic, ta, omega_a) %>%
+
+  pivot_longer(temperature:omega_a, names_to = 'parameter',
+               values_to = 'value') %>%
+  group_by(Month, parameter) %>%
+  summarise(
+    avg    = round(mean(value, na.rm = TRUE), 2),
+    median = round(median(value, na.rm = TRUE), 2),
+    sd     = round(sd(value, na.rm = TRUE), 3),
+    count  = sum(!is.na(value))
+  ) %>%
+  pivot_longer(cols = c('avg', 'median', 'sd', 'count'),
+               names_to = 'label') %>%
+  pivot_wider(id_cols = c(parameter, label), names_from=Month) 
+knitr::kable(monthly_tbl)
+write_csv(monthly_tbl, 'Monthly_summaries_OA_FOCB.csv')
+```
+
+# Base Graphics  
+[Back to top](#)
+
+## Construct Three Plotting Function
+We construct three functions that create a consistent graphic style for 
+presentation. 
+
+1.  The first generates a plot showing  value against time over the whole period 
+    of record.
+
+2.  The second shows a "Seasonal Profile" or Climatology.
+
+3.  The third plots one measured variable against another, with a third possibly
+   coded via color. 
+
+We tried all the `scale_color_viridis_c()` color scales, and the default 
+'viridis' scale is best. `viridis` ranges from purple through green to yellow.
+A reasonable alternative is the 'cividis' palette, which ranges from dark blue 
+through gray to yellow.  
+
+The other viridis palettes will look dreadful with our existing colors.  We 
+considered using `scale_color_gradient()` to brew our own color palette, but
+chose not to, as the viridis palette is close enough to our colors while being
+slightly distinctive.
+   
+### Plot Versus Time
+```{r}
+full_profile <- function(dat, parm, dt = 'dt', color = 'temperature', 
+                           label = NA, color_label = '',
+                           guide = NA, h_adjust = 0.25,
+                           alpha = 0.25, size = 0.5,
+                           add_smooth = FALSE, with_se = FALSE) {
+
+  # These are ugly argument checks, since they don't provide nice error messages.
+  stopifnot(is.data.frame(dat))
+  stopifnot(is.na(label) || (is.character(label) && length(label) == 1))
+  stopifnot(is.na(guide) || (is.numeric(guide)   && length(guide) == 1))
+  
+  # Convert passed parameters to strings, if they are not passed as strings.
+  parm <- enquo(parm)
+  dt <- enquo(dt)
+  color <- enquo(color)
+  
+  parmname <- rlang::as_name(parm)
+  dtname  <- rlang::as_name(dt)
+  colorname <- rlang::as_name(color)
+  
+  # Check that these are data names from the data frame
+  stopifnot(parmname %in% names(dat))
+  stopifnot(dtname %in% names(dat))  
+  stopifnot(colorname %in% names(dat))  
+
+  
+  # Create the variables we will actually pas to ggplot
+  x   <- dat[[dtname]]
+  y   <- dat[[parmname]]
+  col <- dat[[colorname]]
+  
+  
+  plt <- ggplot(dat, aes(x, y)) +
+    geom_point(aes(color = col), alpha = alpha, size = size) +
+    xlab('') +
+    ylab(parmname) +
+
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size = 2),
+                                 byrow = TRUE)) +
+    
+    theme_cbep(base_size = 12) +
+    theme(legend.position =  'bottom',
+          legend.title = element_text(size = 10))
+  
+  if(add_smooth) {
+         plt <- plt + geom_smooth(method = 'gam', 
+                                  formula = y ~ s(x, bs = "cc"),
+                                  se = with_se,
+                                  color = cbep_colors()[1])
+  }
+  
+  if (is.factor(col)) {
+    plt <- plt +
+        scale_color_viridis_d(name = color_label, option = 'viridis')
+
+  }
+  else {
+    plt <- plt +
+        scale_color_viridis_c(name = color_label, optyion = 'viridis')
+  }
+  
+  if(! is.na(guide)) {
+         #lab = if_else(is.na(label), parmname, gsub('\\s*\\([^\\)]+\\)','', label))
+         plt <- plt + geom_hline(aes(yintercept = guide), 
+                                 lty = 'dotted', color = 'gray15') # 
+                      # annotate('text', x=min(x), y=(1 + h_adjust) *(guide), 
+                      #          label=  round(guide,2),
+                      #                       hjust = 0, size=3 )
+         }
+  
+  if(! is.na(label)) {
+         plt <- plt + ylab(label)
+         }
+
+  return(plt)
+}
+```
+
+### Season Profile or Climatology
+This uses our standard `CBEP_colors()`, but reordered.  This corresponds to 
+ordering in the OA chapter
+```{r}
+season_profile <- function(dat, parm, doy = 'doy', year = "year", 
+                           label = NA, guide = NA, h_adjust = 0.05,
+                           alpha = 0.25, size = 0.5,
+                           add_smooth = FALSE, with_se = FALSE) {
+
+  # These are ugly argument checks, since they don't provide nice error messages.
+  stopifnot(is.data.frame(dat))
+  stopifnot(is.na(label) || (is.character(label) && length(label) == 1))
+  stopifnot(is.na(guide) || (is.numeric(guide)   && length(guide) == 1))
+  
+  # Flexible labeling for months of the year
+  monthlengths <-  c(31,28,31, 30,31,30,31,31,30,31,30,31)
+  cutpoints    <- c(0, cumsum(monthlengths)[1:12])
+  monthlabs    <- c(month.abb,'')
+  
+  # Convert passed parameters to strings, if they are not passed as strings.
+  parm <- enquo(parm)
+  doy <- enquo(doy)
+  year <- enquo(year)
+  
+  parmname <- rlang::as_name(parm)
+  doyname  <- rlang::as_name(doy)
+  yearname <- rlang::as_name(year)
+  stopifnot(parmname %in% names(dat))
+  stopifnot(doyname %in% names(dat))  
+  stopifnot(yearname %in% names(dat))  
+
+  x   <- dat[[doyname]]
+  y   <- dat[[parmname]]
+  col <- dat[[yearname]]
+  
+  plt <- ggplot(dat, aes(x, y)) +
+    geom_point(aes(color = factor(col)), alpha = alpha, size = size) +
+    xlab('') +
+    ylab(parmname) +
+    
+    scale_color_manual(values=cbep_colors()[c(3,2,5,4,6)], name='Year') +
+    scale_x_continuous(breaks = cutpoints, labels = monthlabs) +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size = 2))) +
+    
+    theme_cbep(base_size = 12) +
+    theme(axis.text.x=element_text(angle=90, vjust = 1.5))
+  
+  if(add_smooth) {
+         plt <- plt + geom_smooth(method = 'gam', 
+                                  formula = y ~ s(x, bs = "cc"),
+                                  se = with_se,
+                                  color = cbep_colors()[1])
+         }
+  
+  if(! is.na(guide)) {
+         lab = if_else(is.na(label), parmname, gsub('\\s*\\([^\\)]+\\)','', label))
+         plt <- plt + geom_hline(aes(yintercept = guide), 
+                                 lty = 'dotted', color = 'gray15') +
+                      annotate('text', x=0, y=(1 + h_adjust) *(guide), 
+                               label= paste(lab, '=', guide),
+                                            hjust = 0, size=3)
+         }
+  
+  if(! is.na(label)) {
+         plt <- plt + ylab(label)
+         }
+
+  return(plt)
+}
+```
+
+### Cross Plots
+```{r}
+cross_plot <- function(dat, x_parm, y_parm, color_parm = "Month",
+                            x_label = NA, y_label = NA, color_label = '',
+                            alpha = 0.25,
+                            size = 0.5,
+                            add_smooth = FALSE,
+                            with_se = FALSE) {
+
+  # These are ugly argument checks, since they don't provide nice error messages.
+  stopifnot(is.data.frame(dat))
+  stopifnot(is.na(x_label) || (is.character(x_label) && length(x_label) == 1))
+  stopifnot(is.na(y_label) || (is.character(y_label) && length(y_label) == 1))
+  
+  # Convert passed parameters to strings, if they are not passed as strings.
+  x_parm <- enquo(x_parm) # Read this in evaluated
+  y_parm <- enquo(y_parm)
+  color_parm <- enquo(color_parm)
+  
+  x_parmname <-  rlang::as_name(x_parm)
+  y_parmname <-  rlang::as_name(y_parm)
+  colorname  <-  rlang::as_name(color_parm)
+  stopifnot(x_parmname %in% names(dat))
+  stopifnot(y_parmname %in% names(dat)) 
+  stopifnot(colorname %in% names(dat)) 
+
+  y  <- dat[[y_parmname]]
+  x  <- dat[[x_parmname]]
+  color <- dat[[colorname]]
+  
+  plt <- ggplot(dat, aes(x, y)) +
+    geom_point(aes(color = color), alpha = alpha, size = size) +
+    xlab('') +
+    ylab(y_parmname) +
+
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size = 2),
+                                 byrow = TRUE)) +
+    
+    theme_cbep(base_size = 12)
+  
+  if(add_smooth) {
+         plt <- plt + geom_smooth(method = 'gam', 
+                                  formula = y ~ s(x),
+                                  se = with_se,
+                                  color = cbep_colors()[1])
+         }
+  
+  if (is.factor(color)) {
+    plt <- plt +
+        scale_color_viridis_d(name = color_label, option = 'viridis')
+  }
+  else {
+    plt <- plt +
+        scale_color_viridis_c(name = color_label, option = 'viridis')
+  }
+
+  if(! is.na(x_label)) {
+         plt <- plt + xlab(x_label)
+  } 
+  
+  if(! is.na(y_label)) {
+         plt <- plt + ylab(y_label)
+  }
+  return(plt)
+}
+```
+
+### Function to Add Means by Color Groups
+This function is intended principally to add summary points and lines to cross
+plots -- usually by month to emphasize seasonal patterns.
+```{r}
+add_sum <- function(p, dat, x_parm, y_parm, color_parm = "Month", 
+                    color_label = '', with_line = TRUE) {
+  # These are ugly argument checks, since they don't provide nice error messages.
+  stopifnot(is.data.frame(dat))
+  
+  # Convert passed parameters to strings, if they are not passed as strings.
+  x_parm <- enquo(x_parm) # Read this in evaluated
+  y_parm <- enquo(y_parm)
+  color_parm <- enquo(color_parm)
+  
+  x_parmname <-  rlang::as_name(x_parm)
+  y_parmname <-  rlang::as_name(y_parm)
+  colorname  <-  rlang::as_name(color_parm)
+  
+  stopifnot(x_parmname %in% names(dat))
+  stopifnot(y_parmname %in% names(dat)) 
+  stopifnot(colorname %in% names(dat)) 
+
+  df <- tibble(x     = dat[[x_parmname]],
+               y     = dat[[y_parmname]],
+               color = dat[[colorname]]) %>%
+    group_by(color) %>%
+    summarize(x = mean(x, na.rm = TRUE),
+              y = mean(y, na.rm = TRUE)) %>%
+    mutate(color = factor (color, levels = levels(color)))
+  
+  add <- p + geom_point(data = df, mapping = aes(x = x, y = y, fill = color),
+                        shape = 22, size = 3) +
+          scale_fill_viridis_d(name = color_label, option = 'viridis')
+    
+  if(with_line) {
+    add <- add + geom_path(data = df, mapping = aes(x = x, y = y), size = 1,
+              color = 'gray20')
+  }
+
+  return(add)
+}
+```
+
+
+
+
+## Values by Time  
+[Back to top](#)  
+
+### Chlorophyll A
+```{r}
+plt <- full_profile(the_data, chl, dt = 'dt', color = 'Month', 
+             label = 'Chlorophyll A (mg/l)', 
+             guide = quantile(the_data$temperature, .9, na.rm = TRUE))
+plt
+```
+
+### Joint Plot
+```{r fig.width = 6, fig.height = 5}
+facet.labs <-         c('Dissolved Oxygen (mg/l)', 'Salinity (PSU)', 
+                        'Percent Saturation', 'Chlorophyll A (mg/l)')
+names(facet.labs) <-  c('do', 'salinity', 'pctsat', 'chl')
+
+href = tibble(Parameter = c('do', 'salinity', 'pctsat', 'chl'), 
+              val = c(NA_real_, NA_real_, 85, NA_real_))
+
+long_data %>%
+  filter(Parameter %in% c('do', 'salinity', 'pctsat', 'chl')) %>%
+  mutate(Parameter = factor(Parameter, 
+                            levels = c('do', 'salinity', 'pctsat', 'chl'))) %>%
+  full_profile(parm = Value, dt = 'dt', color = "Month", 
+               label = '', color_label = '') +
+  geom_hline(data = href, mapping = aes(yintercept = val),
+             lty = 'dotted', color = 'gray15') +
+  facet_wrap(~ Parameter, nrow = 2, scales = 'free_y',
+             labeller = labeller(Parameter = facet.labs) )
+  
+```
+
+## Seasonal Profiles  
+[Back to top](#)  
+These graphs combine data from multiple years to generate a picture of seasonal
+conditions across multiple years.  Since data coverage is inconsistent year to
+year, data for some times of year are derived from just one or two years, which
+could bias the results.
+
+### Dissolved Oxygen
+Maine's Marine Water Quality standards are expressed in terms of percent 
+saturation, not absolute concentrations
+```{r}
+season_profile(the_data, do, alpha = 0.25,
+               label = "Dissolved Oxygen (mg/l)", 
+               add_smooth = TRUE)
+```
+
+### Percent Saturation
+Maine's Marine Water Quality standards are expressed in terms of percent 
+saturation.  Class SA and Class SB waters must achieve 85% saturation, while 
+class SC waters must achieve 70% saturation
+```{r}
+season_profile(the_data, pctsat, alpha = 0.25,
+               label = "Percent Saturation", 
+               guide = 85,
+               add_smooth = TRUE, with_se = FALSE,
+               h_adjust = 0.025)
+```
+
+### Temperature
+```{r}
+season_profile(the_data, temperature, doy, alpha = 0.25,
+               label = "Temperature (°C)",
+               add_smooth = TRUE, 
+              with_se = FALSE,
+               h_adjust = 0.025)
+```
+
+### Salinity
+```{r}
+season_profile(the_data, salinity, doy, alpha = 0.25,
+               label = "Salinity (PSU)",
+               add_smooth = TRUE, 
+               with_se = FALSE) +
+  scale_y_continuous(limits = c(20, 35))
+```
+
+### Chlorophyll A
+```{r}
+season_profile(the_data, chl, doy, alpha = 0.5,
+               size = .5,
+               label = "Chlorophyll A (mg/l)",
+               add_smooth = TRUE, 
+               with_se = FALSE)
+  #scale_y_log10(limits = c(0.01, 500), 
+  #              labels = scales::label_number(accuracy = .01))
+  
+```
+
+## Cross-Plots  
+[Back to top](#)  
+
+### Dissolved Oxygen and PCO~2~
+```{r}
+plt <- cross_plot(the_data, do, pco2, color_parm = "Month",
+                            x_label = "Dissolved Oxygen (mg/l)", 
+                            y_label = "pCO2 (uAtm)",
+                            alpha = 0.25,
+                            size = 0.5,
+                            add_smooth = FALSE,
+                            with_se = FALSE)
+plt <- plt + 
+  ylab(expression (pCO[2]~(mu*Atm)))
+plt
+```
+
+```{r}
+add_sum (plt, the_data, do, pco2, with_line = TRUE)
+```
+
+### Dissolved Oxygen and Temperature
+```{r}
+plt <- cross_plot(the_data, temperature, do, color_parm = "Month",
+                            y_label = "Dissolved Oxygen (mg/l)", 
+                            x_label = "Temperature (°C)",
+                            alpha = 0.25,
+                            size = 0.5,
+                            add_smooth = FALSE,
+                            with_se = FALSE)
+
+add_sum (plt, the_data, temperature, do, with_line = TRUE)
+```
+
+#### Compare Daily Data
+```{r}
+plt <- cross_plot(daily_data, temperature_med, do_med, color_parm = "Month",
+                            y_label = "Dissolved Oxygen (mg/l)", 
+                            x_label = "Temperature (°C)",
+                            alpha = 1,
+                            size = 01,
+                            add_smooth = FALSE,
+                            with_se = FALSE)
+
+add_sum (plt, daily_data, temperature_med, do_med, with_line = TRUE)
+```
+
+### Dissolved Oxygen and Chlorophyll
+```{r}
+plt <- cross_plot(the_data, do, chl, color_parm = "Month",
+                            x_label = "Dissolved Oxygen (mg/l)", 
+                            y_label = "Chlorophyll A (mg/l)",
+                            alpha = 0.25,
+                            size = 0.5,
+                            add_smooth = FALSE,
+                            with_se = FALSE)
+
+add_sum (plt, the_data, do, chl, with_line = TRUE) #+
+ # scale_y_log10(labels = scales::label_number(accuracy = .01))
+```
+
+#### Compare Daily Data
+```{r}
+plt <- cross_plot(daily_data, do_med, chl_med, color_parm = "Month",
+                            x_label = "Dissolved Oxygen (mg/l)", 
+                            y_label = "Chlorophyll A (mg/l)",
+                            alpha = .5,
+                            size = 1,
+                            add_smooth = FALSE,
+                            with_se = FALSE)
+
+add_sum (plt, daily_data, do_med, chl_med, with_line = TRUE)
+```
+
+#### Color by Day of Year
+### Dissolved Oxygen and Chlorophyll
+```{r}
+plt <- cross_plot(the_data, do, chl, color_parm = doy,
+                            x_label = "Dissolved Oxygen (mg/l)", 
+                            y_label = "Chlorophyll A (mg/l)",
+                            color_label = 'Day of Year',
+                            alpha = 0.25,
+                            size = 0.5,
+                            add_smooth = TRUE,
+                            with_se = FALSE)
+plt + 
+  scale_color_viridis_c(breaks = c(50, 100, 150, 200, 250, 300, 350),
+                        name = 'Day of Year', option = 'viridis')
+```
+
+### Percent Saturation  and Temperature
+```{r}
+plt <- cross_plot(the_data, temperature, pctsat, color_parm = "Month",
+                            y_label = "Percent Saturation", 
+                            x_label = "Temperature (°C)",
+                            alpha = 0.25,
+                            size = 0.5,
+                            add_smooth = FALSE,
+                            with_se = FALSE)
+
+add_sum (plt, the_data, temperature, pctsat, with_line = TRUE)
+```
+
+### Salinity versus Temperature
+```{r}
+plt <- cross_plot(the_data, temperature, salinity, color_parm = Month,
+                            y_label = "Salinity (PSU)", 
+                            x_label = "Temperature (°C)",
+                            alpha = 0.25,
+                            size = 0.5,
+                            add_smooth = FALSE,
+                            with_se = FALSE)
+add_sum (plt, the_data, temperature, salinity, with_line = TRUE)
+
+```
+[Back to top](#)
+
+
