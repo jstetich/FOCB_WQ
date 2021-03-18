@@ -59,7 +59,8 @@ made a tiff copy of the  data using the context menu item
 
 7. We used "Focal Statistics" to generate rasters that show the cumulative sum
    (NOT area) of the land cover raster within 100 m, 500 m, and 1000 m.
-   (to get true area, we still need to multiply values by 25).
+   (to get true area, we still need to multiply values by 25).  These rasters are 
+   too large to include in the GitHub repository, so were omitted.
 
 8. We extracted the values of the three rasters produced in step 5 and three
    rasters produced in step 7 at each Station location. We used  'Extract 
@@ -80,5 +81,5 @@ made a tiff copy of the  data using the context menu item
        based on total area and land area.  
 
 10.  Impervious cover data was exported in a text file 
-"focb_monitoring_imperv.csv".
+     "focb_monitoring_imperv.csv".
 
