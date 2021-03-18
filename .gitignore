@@ -38,3 +38,6 @@ Original_Data/DATA_SOURCES.html
 **/testing/
 **/omitfromgit/
 **/models/
+
+# Large GIS Files
+**/imperv.idb
