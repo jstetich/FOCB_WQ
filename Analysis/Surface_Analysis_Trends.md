@@ -1,7 +1,7 @@
-Analysis of Surface Data from Friends of Casco Bay Monitoring
+Analysis of Water Quality Trends from Friends of Casco Bay Monitoring
 ================
 Curtis C. Bohlen, Casco Bay Estuary Partnership
-3/03/2021
+3/25/2021
 
 -   [Introduction](#introduction)
 -   [Load Libraries](#load-libraries)
@@ -10,6 +10,7 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
     -   [Primary Data](#primary-data)
         -   [Remove 2020 only data](#remove-2020-only-data)
     -   [Add Station Names](#add-station-names)
+    -   [Add Day of Year Value](#add-day-of-year-value)
     -   [Address Secchi Censored
         Values](#address-secchi-censored-values)
     -   [Prevalence of Parameters by
@@ -18,15 +19,32 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
         Data](#transform-the-secchi-and-chlorophyll-a-data)
 -   [Analysis of Trends](#analysis-of-trends)
     -   [Create Trend Data](#create-trend-data)
+    -   [Chlorophyll Data Limited to Long-term Sites
+        Only](#chlorophyll-data-limited-to-long-term-sites-only)
     -   [Construct Nested Tibble](#construct-nested-tibble)
 -   [Overall Trend](#overall-trend)
--   [Nested Models](#nested-models)
-    -   [GAM models](#gam-models)
-        -   [Diagnostic Plots](#diagnostic-plots)
-        -   [ANOVAs](#anovas)
--   [Create Slope Annotations](#create-slope-annotations)
+-   [Hierarchical models](#hierarchical-models)
+    -   [Diagnostic Plots](#diagnostic-plots)
+    -   [Compare Hierarchical Models](#compare-hierarchical-models)
+    -   [Intereaction Plots](#intereaction-plots)
+-   [GAM models](#gam-models)
+    -   [Discussion](#discussion)
+-   [Impact of Unevean Sampling On Chlorophyll
+    Models](#impact-of-unevean-sampling-on-chlorophyll-models)
+-   [Clean Up `nested_data`](#clean-up-nested_data)
+-   [Final Model Review](#final-model-review)
+    -   [ANOVAs](#anovas)
+    -   [Slopes](#slopes)
+-   [Build Graphics](#build-graphics)
+    -   [Create Annotations](#create-annotations)
 -   [Extract Predictions for Statistically Significant
     Trends](#extract-predictions-for-statistically-significant-trends)
+    -   [Create Predictions](#create-predictions)
+        -   [Check results](#check-results)
+        -   [Check Chlorophyll](#check-chlorophyll)
+    -   [Create Transform Objects](#create-transform-objects)
+    -   [Create Plotting Function](#create-plotting-function)
+-   [Generate Graphics](#generate-graphics)
 
 <img
     src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
@@ -49,7 +67,6 @@ historical record.
 # Load Libraries
 
 ``` r
-library(MASS)     # Here for the `boxcox()` function
 library(tidyverse)
 #> -- Attaching packages --------------------------------------- tidyverse 1.3.0 --
 #> v ggplot2 3.3.3     v purrr   0.3.4
@@ -59,9 +76,7 @@ library(tidyverse)
 #> -- Conflicts ------------------------------------------ tidyverse_conflicts() --
 #> x dplyr::filter() masks stats::filter()
 #> x dplyr::lag()    masks stats::lag()
-#> x dplyr::select() masks MASS::select()
 library(readxl)
-#library(readr)
 
 library(mgcv)     # For `gam()` and `gamm()` models
 #> Loading required package: nlme
@@ -71,36 +86,7 @@ library(mgcv)     # For `gam()` and `gamm()` models
 #> 
 #>     collapse
 #> This is mgcv 1.8-33. For overview type 'help("mgcv-package")'.
-#library(maxLik)
-library(lme4)    # For mixed effectws models
-#> Loading required package: Matrix
-#> 
-#> Attaching package: 'Matrix'
-#> The following objects are masked from 'package:tidyr':
-#> 
-#>     expand, pack, unpack
-#> 
-#> Attaching package: 'lme4'
-#> The following object is masked from 'package:nlme':
-#> 
-#>     lmList
-#library(nlme)   # probably only needed if we need to model autocorrelation
-
 library(emmeans)
-
-library(GGally)
-#> Registered S3 method overwritten by 'GGally':
-#>   method from   
-#>   +.gg   ggplot2
-#> 
-#> Attaching package: 'GGally'
-#> The following object is masked from 'package:emmeans':
-#> 
-#>     pigs
-#library(zoo)
-#library(lubridate)  # here, for the make_datetime() function
-
-#library(broom)
 
 library(CBEPgraphics)
 load_cbep_fonts()
@@ -170,7 +156,7 @@ the_data <- the_data %>%
 
 Our data contains two stations that are not associated with locations
 that were included in our spatial data. We can see that because when we
-`left_join()` by `station`, no `station_name` value is carried over.
+`left_join()` by `station`, no `station_name` is carried over.
 
 ``` r
 l <- the_data %>%
@@ -182,7 +168,7 @@ l
 #> [1] "CMS3"  "P6CBI"
 ```
 
-If we look at those records, on is represented by only a single
+If we look at those records, one is represented by only a single
 observation, and the other only by data from 2020. Neither matter for
 the current analysis. They will get filtered out when we select data to
 describe recent conditions, and trends.
@@ -203,6 +189,14 @@ the_data %>%
 #> # ... with 9 more variables: sample_depth <dbl>, secchi <chr>,
 #> #   water_depth <dbl>, temperature <dbl>, salinity <dbl>, do <dbl>,
 #> #   pctsat <dbl>, pH <dbl>, chl <dbl>
+```
+
+## Add Day of Year Value
+
+``` r
+the_data <- the_data %>%
+  mutate(doy = as.numeric(format(dt, '%j'))) %>%
+  relocate(doy, .after = dt)
 ```
 
 ## Address Secchi Censored Values
@@ -327,17 +321,32 @@ So frequent chlorophyll data is available since 2001 from three sites:
 
 P5BSD P6FGG P7CBI
 
-This raises the question of whether to filter stations for each
-parameter separately. Given that the numbers of samples available over
-time are similar for all other parameters, that is probably
-notnecessary.
-
 ## Transform the Secchi and Chlorophyll A Data
 
-We create a log plus one transformed version of the Chlorophyll data
-here, to facilitate “parallel” construction of statistical models. We
-end up dropping several of these alternatives transforms after we
-examine model residuals.
+We create a square root transform of the Secchi data, and both log() and
+log(X + 1) transformed version of the Chlorophyll data here. That allows
+us to conduct analyses of transformed and untransformed data in
+parallel.
+
+The choice of transform for chlorophyll has significant import, as it
+determines whether chlorophyll is considered to have a significant
+long-term trend or not. This confusing situation is driven by fifteen
+nominal “zero” values in the data from early in the data record. These
+records have fairly high leverage and the way they are handled
+determines the nominal “significance” of a long-term decline in
+chlorophyll values.
+
+We examined a number of different ways to handle those records
+(replacing them with arbitrary non-zero values, using various
+transforms) and the bottom line is that choice of methods determines
+significance of the long-term trend.
+
+See `Surface_Analysis_Chlorophyll_Trends.Rmd` for details of different
+transforms. In sum, log() transform drops the zero values, and shows a
+significant decline in chlorophyll. log(x+1) transform retains all data
+points and also shows a significant trend, but log(X + 0.5) and log(X +
+0.25) transforms (which each give more weight to those nominal “zero”
+values) do not.
 
 ``` r
 the_data <- the_data %>%
@@ -407,40 +416,68 @@ We are reduced to only 17 stations with long-term records for trend
 analysis. We noted above that we have limited chlorophyll data before
 the last couple of years. We address that momentarily
 
+## Chlorophyll Data Limited to Long-term Sites Only
+
+Coverage of chlorophyll data is sparse prior to 2007, and uneven at most
+stations since. We create more limited (transformed) chlorophyll data
+sets, focusing only on the three sites for which we have long-term data.
+
+``` r
+trend_data <- trend_data %>%
+  mutate(log_chl_2 = if_else(station %in% c('P5BSD', 'P6FGG', 'P7CBI'),
+                                   log_chl, NA_real_)) %>%
+  mutate(log1_chl_2 = if_else(station %in% c('P5BSD', 'P6FGG', 'P7CBI'),
+                                   log1_chl, NA_real_)) %>%
+  relocate(log_chl_2, log1_chl_2, .after = log1_chl)
+```
+
 ## Construct Nested Tibble
 
 ``` r
 units <- tibble(parameter = c('secchi_2', 'sqrt_secchi', 'temperature', 
                               'salinity', 'do',
                               'pctsat', 'pH', 
-                              'chl', 'log_chl', 'log1_chl'),
-                label = c("Secchi Depth", "Sqt Secchi", "Temperature",
+                              'chl', 'log_chl', 
+                              'log_chl_2', 'log1_chl', 
+                              'log1_chl_2'),
+                label = c("Secchi Depth", "Sqrt Secchi Depth", "Temperature",
                          "Salinity", "Dissolved Oxygen",
                          "Percent Saturation", "pH",
-                         "Chlorophyll A", "Log Chlorophyll A", "Log Chlorophyll A plus 1"),
-                units = c('m', '', paste0("\U00B0", "C"),
+                         "Chlorophyll A", "Log(Chlorophyll A)", 
+                         "Log(Chlorophyll A)", "Log(Chlorophyll A plus 1)", 
+                         "Log( Chlorophyll A plus 1)"),
+                units = c('m', 'm', paste0("\U00B0", "C"),
                           'PSU', 'mg/l',
                           '', '',
-                          'mg/l', '', ''))
+                          'mg/l', 'mg/l', 
+                          'mg/l', 'mg/l',
+                          'mg/l'))
 
 nested_data <- trend_data %>%
   select(-time, -sample_depth, 
          -secchi) %>%
   mutate(year_f = factor(year)) %>%
-  relocate(water_depth, bottom_flag, .after = month) %>%
-  pivot_longer(c(secchi_2:log1_chl), names_to = 'parameter', 
+  select(-water_depth) %>%
+  relocate(bottom_flag, .after = month) %>%
+  
+  pivot_longer(c(secchi_2:log1_chl_2), names_to = 'parameter', 
                values_to = 'value') %>%
   filter(! is.na(value)) %>%
   
-  # Remove extra chlorophyll data so we focus on long-term stations
-  filter(! (parameter == 'chl' &  
-              (! station %in% c('P5BSD', 'P6FGG', 'P7CBI')))) %>%
-  
+  # This allows us to ensure the order of the rows in the nested tibble
+  mutate(parameter = factor(parameter,
+                            levels = c('secchi_2', 'sqrt_secchi', 'temperature',
+                                       'salinity', 'do',
+                                       'pctsat', 'pH',
+                                       'chl', 'log_chl',
+                                       'log_chl_2', 'log1_chl', 'log1_chl_2'))) %>%
+
   # change all `bottom_flag` values to FALSE except for secchi_2 df 
   # this allows selective coloring in later graphics
   mutate(bottom_flag = if_else(parameter != 'secchi_2', FALSE, bottom_flag)) %>%
   group_by(parameter) %>%
   nest() %>%
+  arrange(parameter) %>%
   left_join(units, by = 'parameter')
 ```
 
@@ -456,13 +493,18 @@ across sites. it is not entirely clear whether a random year term is
 needed or appropriate. We include it in our initial model explorations
 to see if it better controls for heavy-tailed distributions.
 
-# Nested Models
-
-## GAM models
+# Hierarchical models
 
 We use a GAM model with a random factor smoothing term. We could just as
 well use `lmer()` or `lme()`. The GAM framework makes it easier to
-evaluate smoothers for the year to year variation.
+evaluate smoothers for the year to year variation. We restrict ourselves
+to linear trends by year, but explore several ways of modeling
+seasonality, including a polynomial model by day of the year, a simple
+model my month, and an interaction model by month.
+
+The primary purpose of modeling seasonality here is to remove data
+variability, but it introduces complexity because the long-term trends
+are expected to vary by season.
 
 ``` r
 nested_data <- nested_data %>%
@@ -470,19 +512,35 @@ nested_data <- nested_data %>%
                                               month + 
                                               #s(year_f, bs = 're') +
                                               s(station, bs = 're'), 
-                                            data = df)))
+                                            data = df))) %>%
+  mutate(lmers_2 = map(data, function(df) gam(value ~ year + 
+                                              month + year:month +
+                                              #s(year_f, bs = 're') +
+                                              s(station, bs = 're'), 
+                                            data = df)))  #%>%
+  # mutate(polys = map(data, function(df) gam(value ~ year + poly(doy,3) +
+  #                                             s(station, bs = 're'), 
+  #                                           data = df)))
 ```
 
-### Diagnostic Plots
+## Diagnostic Plots
+
+We focus on the simpler model. Others should be similar or slightly
+better.
 
 ``` r
 for (p in nested_data$parameter) {
+  cat('\n')
+  cat(p)
+  cat('\n')
   gam.check(nested_data$lmers[nested_data$parameter == p][[1]],
        sub = p)
 }
+#> 
+#> secchi_2
 ```
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-14-1.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Trends_files/figure-gfm/diagnostics-1.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -496,8 +554,10 @@ for (p in nested_data$parameter) {
     #> 
     #>            k' edf k-index p-value
     #> s(station) 17  16      NA      NA
+    #> 
+    #> sqrt_secchi
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-14-2.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Trends_files/figure-gfm/diagnostics-2.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -511,8 +571,10 @@ for (p in nested_data$parameter) {
     #> 
     #>            k' edf k-index p-value
     #> s(station) 17  16      NA      NA
+    #> 
+    #> temperature
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-14-3.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Trends_files/figure-gfm/diagnostics-3.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -526,8 +588,10 @@ for (p in nested_data$parameter) {
     #> 
     #>              k'  edf k-index p-value
     #> s(station) 17.0 15.9      NA      NA
+    #> 
+    #> salinity
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-14-4.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Trends_files/figure-gfm/diagnostics-4.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -541,8 +605,10 @@ for (p in nested_data$parameter) {
     #> 
     #>            k' edf k-index p-value
     #> s(station) 17  16      NA      NA
+    #> 
+    #> do
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-14-5.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Trends_files/figure-gfm/diagnostics-5.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -556,8 +622,10 @@ for (p in nested_data$parameter) {
     #> 
     #>              k'  edf k-index p-value
     #> s(station) 17.0 15.9      NA      NA
+    #> 
+    #> pctsat
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-14-6.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Trends_files/figure-gfm/diagnostics-6.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -571,8 +639,10 @@ for (p in nested_data$parameter) {
     #> 
     #>              k'  edf k-index p-value
     #> s(station) 17.0 15.9      NA      NA
+    #> 
+    #> pH
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-14-7.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Trends_files/figure-gfm/diagnostics-7.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -586,8 +656,27 @@ for (p in nested_data$parameter) {
     #> 
     #>              k'  edf k-index p-value
     #> s(station) 17.0 15.9      NA      NA
+    #> 
+    #> chl
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-14-8.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Trends_files/figure-gfm/diagnostics-8.png" style="display: block; margin: auto;" />
+
+    #> 
+    #> Method: GCV   Optimizer: magic
+    #> Smoothing parameter selection converged after 5 iterations.
+    #> The RMS GCV score gradient at convergence was 0.0001035701 .
+    #> The Hessian was positive definite.
+    #> Model rank =  25 / 25 
+    #> 
+    #> Basis dimension (k) checking results. Low p-value (k-index<1) may
+    #> indicate that k is too low, especially if edf is close to k'.
+    #> 
+    #>               k'   edf k-index p-value
+    #> s(station) 17.00  2.74      NA      NA
+    #> 
+    #> log_chl
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/diagnostics-9.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -601,8 +690,27 @@ for (p in nested_data$parameter) {
     #> 
     #>              k'  edf k-index p-value
     #> s(station) 17.0 11.7      NA      NA
+    #> 
+    #> log_chl_2
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-14-9.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Trends_files/figure-gfm/diagnostics-10.png" style="display: block; margin: auto;" />
+
+    #> 
+    #> Method: GCV   Optimizer: magic
+    #> Smoothing parameter selection converged after 9 iterations.
+    #> The RMS GCV score gradient at convergence was 2.976352e-07 .
+    #> The Hessian was positive definite.
+    #> Model rank =  11 / 11 
+    #> 
+    #> Basis dimension (k) checking results. Low p-value (k-index<1) may
+    #> indicate that k is too low, especially if edf is close to k'.
+    #> 
+    #>                  k'      edf k-index p-value
+    #> s(station) 3.00e+00 4.48e-09      NA      NA
+    #> 
+    #> log1_chl
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/diagnostics-11.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -616,13 +724,15 @@ for (p in nested_data$parameter) {
     #> 
     #>              k'  edf k-index p-value
     #> s(station) 17.0 10.7      NA      NA
+    #> 
+    #> log1_chl_2
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-14-10.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Trends_files/figure-gfm/diagnostics-12.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
-    #> Smoothing parameter selection converged after 10 iterations.
-    #> The RMS GCV score gradient at convergence was 2.815052e-05 .
+    #> Smoothing parameter selection converged after 9 iterations.
+    #> The RMS GCV score gradient at convergence was 2.263978e-07 .
     #> The Hessian was positive definite.
     #> Model rank =  11 / 11 
     #> 
@@ -630,50 +740,471 @@ for (p in nested_data$parameter) {
     #> indicate that k is too low, especially if edf is close to k'.
     #> 
     #>                  k'      edf k-index p-value
-    #> s(station) 3.00e+00 9.21e-09      NA      NA
+    #> s(station) 3.00e+00 1.61e-08      NA      NA
 
 -   Secchi and the square root of secchi both have moderately heavy
     tails. The square root transform does slightly reduce skewness of
-    the residuals, and reduces the tendency to heavy tails.
--   Salinity and pH show evidence of relatively poor models missing
-    significant sources of variability (large gaps in predicted
-    salinity. Slight indication that scale may depending on location and
-    left skew for pH).
+    the residuals, and reduces the tendency to heavy tails.  
+-   Salinity shows evidence of a poor model missing significant sources
+    of variability (large gaps in predicted salinity).  
+-   pH also shows slight evidence of a problematic model, with higher
+    errors at lower pH. That may reflect the influence of freshwater
+    inflow on both variability and average pH, and so may reflect
+    reality.  
 -   Basically every other parameter here has moderately heavy tails, but
-    the regressions show few other pathologies.
+    the regressions show few other pathologies.  
 -   In this setting, it is the log of chlorophyll A , not log of
     chlorophyll A plus one that provides the better distribution of
-    model residuals. This contrasts with what performed better over the
-    past five years.
+    model residuals. This contrasts with what performed better looking
+    at data collected only over the past five years. However, some
+    chlorophyll observations have a nominal value of zero, and at least
+    one has a (very slightly) negative value. We either need to handle
+    those observations as censored values (with no reported detection
+    limit), or use the log(x + 1) transform anyway.
 
 (We did look at the station random factors, and they look OK for
 everything except salinity, where we have a couple of sites strongly
 influenced by freshwater.)
 
-#### Refit the Chlorophyll Model
-
-We want the transformation in the model object, so we can use the tools
-in `emmeans` to extract marginal means. We refit the chlorophyll model,
-add it to the nested tibble, and delete the other two chlorophyll data
-rows and the square root transformed Secchi depth row.
+## Compare Hierarchical Models
 
 ``` r
-df <- nested_data %>%
-  filter(parameter == 'chl') %>%
-  pull(data)
-df <- df[[1]]  # Extract the first item in the list....
-
-mod <- gam(log1p(value) ~ year + month + s(station, bs = 're'),  data = df)
-```
-
-``` r
-nested_data$lmers[nested_data$parameter == 'chl'] <- list(mod)
-
 nested_data <- nested_data %>%
-  filter(! parameter %in% c('log_chl', 'log1_chl', 'sqrt_secchi'))
+  mutate(compare = list(anova(# polys[[1]], 
+                              lmers[[1]], lmers_2[[1]], test = 'LRT')))
+
+names(nested_data$compare) <- nested_data$parameter
+nested_data$compare
+#> $secchi_2
+#> Analysis of Deviance Table
+#> 
+#> Model 1: value ~ year + month + s(station, bs = "re")
+#> Model 2: value ~ year + month + year:month + s(station, bs = "re")
+#>   Resid. Df Resid. Dev Df Deviance  Pr(>Chi)    
+#> 1      5150     2005.2                          
+#> 2      5144     1992.1  6   13.048 7.711e-06 ***
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> 
+#> $sqrt_secchi
+#> Analysis of Deviance Table
+#> 
+#> Model 1: value ~ year + month + s(station, bs = "re")
+#> Model 2: value ~ year + month + year:month + s(station, bs = "re")
+#>   Resid. Df Resid. Dev Df Deviance  Pr(>Chi)    
+#> 1      5150     245.38                          
+#> 2      5144     243.77  6   1.6146 6.514e-06 ***
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> 
+#> $temperature
+#> Analysis of Deviance Table
+#> 
+#> Model 1: value ~ year + month + s(station, bs = "re")
+#> Model 2: value ~ year + month + year:month + s(station, bs = "re")
+#>   Resid. Df Resid. Dev Df Deviance  Pr(>Chi)    
+#> 1      5620      22359                          
+#> 2      5614      22265  6   94.555 0.0005583 ***
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> 
+#> $salinity
+#> Analysis of Deviance Table
+#> 
+#> Model 1: value ~ year + month + s(station, bs = "re")
+#> Model 2: value ~ year + month + year:month + s(station, bs = "re")
+#>   Resid. Df Resid. Dev Df Deviance Pr(>Chi)  
+#> 1      5565      81961                       
+#> 2      5559      81721  6   239.74  0.01219 *
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> 
+#> $do
+#> Analysis of Deviance Table
+#> 
+#> Model 1: value ~ year + month + s(station, bs = "re")
+#> Model 2: value ~ year + month + year:month + s(station, bs = "re")
+#>   Resid. Df Resid. Dev Df Deviance Pr(>Chi)
+#> 1      5502     4401.2                     
+#> 2      5496     4394.4  6   6.8085   0.2027
+#> 
+#> $pctsat
+#> Analysis of Deviance Table
+#> 
+#> Model 1: value ~ year + month + s(station, bs = "re")
+#> Model 2: value ~ year + month + year:month + s(station, bs = "re")
+#>   Resid. Df Resid. Dev Df Deviance Pr(>Chi)
+#> 1      5457     630711                     
+#> 2      5451     629541  6   1169.9   0.1193
+#> 
+#> $pH
+#> Analysis of Deviance Table
+#> 
+#> Model 1: value ~ year + month + s(station, bs = "re")
+#> Model 2: value ~ year + month + year:month + s(station, bs = "re")
+#>   Resid. Df Resid. Dev Df Deviance  Pr(>Chi)    
+#> 1      5067     250.36                          
+#> 2      5061     248.45  6   1.9087 7.552e-07 ***
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> 
+#> $chl
+#> Analysis of Deviance Table
+#> 
+#> Model 1: value ~ year + month + s(station, bs = "re")
+#> Model 2: value ~ year + month + year:month + s(station, bs = "re")
+#>   Resid. Df Resid. Dev     Df Deviance  Pr(>Chi)    
+#> 1    855.15     102309                              
+#> 2    848.79      95862 6.3605   6446.3 2.547e-10 ***
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> 
+#> $log_chl
+#> Analysis of Deviance Table
+#> 
+#> Model 1: value ~ year + month + s(station, bs = "re")
+#> Model 2: value ~ year + month + year:month + s(station, bs = "re")
+#>   Resid. Df Resid. Dev     Df Deviance Pr(>Chi)    
+#> 1    828.34     634.29                             
+#> 2    822.22     594.20 6.1257   40.084 3.97e-10 ***
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> 
+#> $log_chl_2
+#> Analysis of Deviance Table
+#> 
+#> Model 1: value ~ year + month + s(station, bs = "re")
+#> Model 2: value ~ year + month + year:month + s(station, bs = "re")
+#>   Resid. Df Resid. Dev Df Deviance  Pr(>Chi)    
+#> 1       401     405.90                          
+#> 2       395     382.58  6   23.323 0.0005047 ***
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> 
+#> $log1_chl
+#> Analysis of Deviance Table
+#> 
+#> Model 1: value ~ year + month + s(station, bs = "re")
+#> Model 2: value ~ year + month + year:month + s(station, bs = "re")
+#>   Resid. Df Resid. Dev     Df Deviance Pr(>Chi)    
+#> 1    845.95     364.34                             
+#> 2    839.71     340.15 6.2425   24.191 6.24e-11 ***
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> 
+#> $log1_chl_2
+#> Analysis of Deviance Table
+#> 
+#> Model 1: value ~ year + month + s(station, bs = "re")
+#> Model 2: value ~ year + month + year:month + s(station, bs = "re")
+#>   Resid. Df Resid. Dev     Df Deviance  Pr(>Chi)    
+#> 1    416.00     257.17                              
+#> 2    409.77     240.05 6.2339   17.118 6.804e-05 ***
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 ```
 
-### ANOVAs
+The interaction model is a better fit almost always. The exceptions are
+dissolved oxygen and percent saturation.
+
+That poses significant challenges for presentation in State of the Bay.
+Given the high level of variability in the data, we can’t present
+multiple trend lines in a single plot. So the question is, how do we
+present the complexity of seasonal changes without overwhelming our
+readers?
+
+## Intereaction Plots
+
+We need to look dig into these patterns with interaction plots and
+decide how to simplify our findings for State of Casco Bay.
+
+``` r
+nested_data <- nested_data %>%
+  mutate(emmi = map(lmers_2, function(mod) emmip(mod, month ~ year, 
+                                                  at = list(year = 1993:2020)))) %>%
+  mutate(emmi = list(emmi[[1]] + ggtitle(parameter)))
+```
+
+``` r
+print(nested_data$emmi)
+#> [[1]]
+```
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/show_interaction_plots-1.png" style="display: block; margin: auto;" />
+
+    #> 
+    #> [[2]]
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/show_interaction_plots-2.png" style="display: block; margin: auto;" />
+
+    #> 
+    #> [[3]]
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/show_interaction_plots-3.png" style="display: block; margin: auto;" />
+
+    #> 
+    #> [[4]]
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/show_interaction_plots-4.png" style="display: block; margin: auto;" />
+
+    #> 
+    #> [[5]]
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/show_interaction_plots-5.png" style="display: block; margin: auto;" />
+
+    #> 
+    #> [[6]]
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/show_interaction_plots-6.png" style="display: block; margin: auto;" />
+
+    #> 
+    #> [[7]]
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/show_interaction_plots-7.png" style="display: block; margin: auto;" />
+
+    #> 
+    #> [[8]]
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/show_interaction_plots-8.png" style="display: block; margin: auto;" />
+
+    #> 
+    #> [[9]]
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/show_interaction_plots-9.png" style="display: block; margin: auto;" />
+
+    #> 
+    #> [[10]]
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/show_interaction_plots-10.png" style="display: block; margin: auto;" />
+
+    #> 
+    #> [[11]]
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/show_interaction_plots-11.png" style="display: block; margin: auto;" />
+
+    #> 
+    #> [[12]]
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/show_interaction_plots-12.png" style="display: block; margin: auto;" />
+
+For most of those, there is one month, often April, that behaves
+differently. Generally, April, May, and June sometimes do things
+differently. Chlorophyll is an exception, where there appears to be a
+summer-long seasonal pattern to the changes.
+
+# GAM models
+
+We may be better off examining GAM models by day of year. The
+interaction term may help identify patterns without being distracted by
+the month designations,
+
+We fit the models with simple tensor smoothing terms. Using interaction
+tensor terms showed that the interaction term was significant in all
+cases. But the results are hard to interpret. Her we show only a fairly
+low dimension GAM tensor interaction fit, to figure out what is going on
+seasonally.
+
+``` r
+nested_data <- nested_data %>%
+  mutate(gams = map(data, function(df) gam(value ~ te(year, doy, k = 4) +
+                                              s(station, bs = 're'), 
+                                            data = df)))
+```
+
+``` r
+for (p in nested_data$parameter) {
+  plot(nested_data$gams[nested_data$parameter == p][[1]])
+  title(sub = p)
+}
+```
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-1.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-2.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-3.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-4.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-5.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-6.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-7.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-8.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-9.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-10.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-11.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-12.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-13.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-14.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-15.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-16.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-17.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-18.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-19.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-20.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-21.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-22.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-23.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/plot_gams-24.png" style="display: block; margin: auto;" />
+
+-   Secchi Depth in mid summer has gotten slightly worse, with maybe a
+    slight improvement in the spring. No change in fall.
+
+-   Temperature shows no meaningful interaction, and no clear trend in
+    this model.
+
+-   Salinity shows slightly lower salinity in spring, and higher
+    salinity in the fall.
+
+-   Dissolved oxygen shown no strong long-term trend.
+
+-   Percent Saturation shows a complex pattern, with evidence for higher
+    percent saturation in recent years, with a change in the early
+    2000s.
+
+-   pH shows increasing pH in spring in recent years, but the big change
+    is that the difference between spring and summer has increased in
+    recent years. That change may reflect adoption of electrochemical pH
+    meters in or around 2012.
+
+-   Chlorophyll shows a fairly steady decline in spring, with little
+    change in summer and fall. That general result is fairly robust, but
+    its strength varies by model.
+
+## Discussion
+
+The Day of Year GAM models are informative, smoothing out some of the
+weirdness of the month-based models. But they almost certainly overfit
+our data. Given the large scatter in our data, and the relatively small
+magnitude of the slope terms, we can fit patterns that are of no
+practical importance.
+
+There was, however, a theme here – springs have been somewhat different
+in recent years. Higher Secchi, lower salinity, higher pH, lower
+chlorophyll.
+
+That suggests we might analyze separate seasonal trends.
+
+# Impact of Unevean Sampling On Chlorophyll Models
+
+We focus here on the the impact of whether we look at all chlorophyll
+data or only data from the three long-term chlorophyll sites. We look at
+the log(x+1) models, but a similar effect occurs with our other models.
+Data restricted to long-term sites shows trends, while if we look all
+available data the long-term trend vanishes.
+
+See `Surface_Analysis_Chlorophyll_Trends.Rmd` for additional details
+looking at issues with chlorophyll models.
+
+``` r
+nested_data$parameter[11]
+#> [1] "log1_chl"
+mod <- nested_data$lmers[11][[1]]
+summary(mod)
+#> 
+#> Family: gaussian 
+#> Link function: identity 
+#> 
+#> Formula:
+#> value ~ year + month + s(station, bs = "re")
+#> 
+#> Parametric coefficients:
+#>              Estimate Std. Error t value Pr(>|t|)    
+#> (Intercept) -2.531988   8.777522  -0.288 0.773063    
+#> year         0.002095   0.004361   0.481 0.630986    
+#> monthMay    -0.584160   0.116568  -5.011 6.58e-07 ***
+#> monthJun    -0.415539   0.116323  -3.572 0.000374 ***
+#> monthJul    -0.152078   0.110831  -1.372 0.170375    
+#> monthAug    -0.107020   0.111073  -0.964 0.335566    
+#> monthSep    -0.081409   0.111421  -0.731 0.465195    
+#> monthOct    -0.263226   0.119472  -2.203 0.027845 *  
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> 
+#> Approximate significance of smooth terms:
+#>              edf Ref.df     F  p-value    
+#> s(station) 10.74     16 2.477 2.72e-06 ***
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> 
+#> R-sq.(adj) =  0.104   Deviance explained = 12.2%
+#> GCV = 0.43848  Scale est. = 0.42901   n = 868
+```
+
+``` r
+nested_data$parameter[12]
+#> [1] "log1_chl_2"
+mod <- nested_data$lmers[12][[1]]
+summary(mod)
+#> 
+#> Family: gaussian 
+#> Link function: identity 
+#> 
+#> Formula:
+#> value ~ year + month + s(station, bs = "re")
+#> 
+#> Parametric coefficients:
+#>              Estimate Std. Error t value Pr(>|t|)   
+#> (Intercept) 31.728692  13.420458   2.364  0.01853 * 
+#> year        -0.014924   0.006681  -2.234  0.02603 * 
+#> monthMay    -0.493815   0.160605  -3.075  0.00225 **
+#> monthJun    -0.355541   0.164962  -2.155  0.03171 * 
+#> monthJul    -0.129825   0.153570  -0.845  0.39838   
+#> monthAug    -0.169140   0.152372  -1.110  0.26762   
+#> monthSep    -0.097084   0.157826  -0.615  0.53880   
+#> monthOct    -0.293545   0.161950  -1.813  0.07062 . 
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> 
+#> Approximate significance of smooth terms:
+#>                 edf Ref.df F p-value
+#> s(station) 1.61e-08      3 0   0.398
+#> 
+#> R-sq.(adj) =  0.035   Deviance explained =  5.1%
+#> GCV = 0.63007  Scale est. = 0.61818   n = 424
+```
+
+So it makes a difference which data series we use. The restricted data
+looking only at three long-term station produces a significant trend,
+while the trend is not judged significant if we include data from other
+stations.
+
+That fails to build great confidence in these models, so we dig further.
+
+# Clean Up `nested_data`
+
+We need to make sure we have only our final models and data in the
+nested data frame.
+
+1.  We drop investigation models that we will not use in our
+    presentations
+
+2.  We delete unused chlorophyll data and models and rebuild our
+    preferred chlorophyll model.
+
+3.  While we are at it, we delete the square root transformed Secchi
+    depth row.
+
+``` r
+nested_data <- nested_data %>%
+  select(-lmers_2, -compare, -emmi, -gams)
+```
+
+For the chlorophyll model, we want to focus on the `log(x+1)` model. We
+want to place that model with data that is limited to the three
+long-term stations only. We recalculate the model, so the transform
+specification is included in the model in a way that `emmeans` will
+recognize.
+
+We also want a version of our model that incorporates the data transform
+into the model object, not the data, to facilitate plotting. We do that
+by replacing the ‘chl’ data and model in the nested tibble.
+
+``` r
+dat <- nested_data %>%
+  filter(parameter == 'chl') %>%
+  pull(data)               # Returns a list
+dat <- dat[[1]]  # Extract the first item....  df is now a data frame
+dat <- dat %>%
+  filter(! is.na(value)) %>%
+  filter(station %in% c('P5BSD', 'P6FGG', 'P7CBI'))
+```
+
+`emmeans` recognizes the log(value + 1) transform, but it does not
+recognize the equivalent log1p() transform.
+
+``` r
+new_mod <- gam(log(value + 1) ~ year + 
+                 month + 
+                 s(station, bs = 're'), 
+               data = dat)
+
+nested_data$lmers[nested_data$parameter == 'chl'] <- list(new_mod)
+nested_data$data[nested_data$parameter == 'chl']  <- list(dat)
+```
+
+``` r
+nested_data <- nested_data %>%
+  filter(! parameter %in% c('log_chl', 'log_chl_2', 'log1_chl', 'log1_chl_2', 
+                            'sqrt_secchi'))
+```
+
+# Final Model Review
+
+## ANOVAs
 
 ``` r
 for (p in nested_data$parameter) {
@@ -788,7 +1319,7 @@ for (p in nested_data$parameter) {
 #> Link function: identity 
 #> 
 #> Formula:
-#> log1p(value) ~ year + month + s(station, bs = "re")
+#> log(value + 1) ~ year + month + s(station, bs = "re")
 #> 
 #> Parametric Terms:
 #>       df     F p-value
@@ -802,32 +1333,52 @@ for (p in nested_data$parameter) {
 
 -   We are testing ONLY for a linear trend in water quality parameters.
     We are NOT treating years as random factors in the model. We do not
-    fit interaction terms, although theyare likely.
+    fit interaction terms, although they are important for several of
+    these models, as shown above.
 
--   Dissolved oxygen, pH, and chlorophyll show no evidence of a trends
-    over time. All the other parameters do. Interestingly, percent
-    saturation DOES show a statistically detectable long-term trend even
-    though DO does not.
+-   Dissolved oxygen and pH show limited evidence of a trends over time.
+    What trends we found for pH were confounded with seasonal patterns.
+    Interestingly, percent saturation DOES show a statistically
+    detectable long-term trend even though DO does not.
 
 -   The month factor and the station by station random factor are both
-    significant for all parameters.
+    significant for almost all parameters.
 
-# Create Slope Annotations
-
-It’s quite possible that some of these “significant” relationships are
-small enough to have little meaning.
+## Slopes
 
 ``` r
 nested_data <- nested_data %>%
-  mutate(slopes = map(lmers, function(lm) coef(lm)[[2]])) %>%
-  mutate(ch_10yr = map(slopes, function(s) round(s * 10, 2))) %>%
-  mutate(annot = map(ch_10yr, function(x) paste(x, units, '\nper decade'))) %>%
-  mutate(annot = if_else(parameter %in% c('do', 'pH', 'chl'),
-                               'No trend', annot[[1]]))
+ mutate(slopes = map(lmers, function(mod) coef(mod)[[2]]))
+cbind(nested_data$parameter, nested_data$slopes)
+#>      [,1]          [,2]         
+#> [1,] "secchi_2"    -0.009212962 
+#> [2,] "temperature" 0.05582258   
+#> [3,] "salinity"    -0.0251167   
+#> [4,] "do"          -0.001791498 
+#> [5,] "pctsat"      0.07094398   
+#> [6,] "pH"          -0.0005351544
+#> [7,] "chl"         -0.01492378
 ```
 
-Even where statistically significant, the overall trends are quite
-small.
+# Build Graphics
+
+## Create Annotations
+
+It’s quite possible that some of these “significant” relationships are
+small enough to have little meaning. We need to pull out slopes to
+include in the graphics.
+
+``` r
+nested_data <- nested_data %>%
+  mutate(ch_10yr = map(slopes, function(s) round(s * 10, 3))) %>%
+  mutate(annot = map(ch_10yr, function(x) paste(x, units, 'per decade'))) %>%
+  mutate(annot = paste(if_else(slopes > 0, '+', ''), annot)) %>%
+  mutate(annot = if_else(parameter %in% c('do', 'pH'),
+                               'No trend', annot[[1]])) %>%
+  mutate(annot = if_else(parameter == 'chl',
+                         'Likely reduction\n(three stations)',
+                         annot))
+```
 
 # Extract Predictions for Statistically Significant Trends
 
@@ -835,79 +1386,177 @@ We need to look at these relationships graphically. We can do that with
 estimated marginal means. Note that these marginal means are averaged
 across stations (a random factor) and months (a fixed factor).
 
-Some of these models are probably not adequate, with high residuals.
+Because we transformed the Secchi depth value, we need to include
+transforms here so all parameters are treated equally.
 
-It’s not clear how we should average across those levels…. Or should we
-fix on a specific month? Show lines for each month?
-
-filter(! parameter %in% c(‘do’, ‘pH’, ‘log\_chl’)) %&gt;%
+## Create Predictions
 
 ``` r
 nested_data <- nested_data %>%
-  mutate(emms = map(lmers, 
-                    function(mod) summary(emmeans(mod, c('year'),
-                                                  at = list(year = 1993:2020),
-                                                  type = 'response')))) %>%
-  mutate(emms = if_else(parameter %in% c('do', 'pH', 'chl'),
-                        list(NA), emms))
+  mutate(preds = map(lmers, function(mod) summary(emmeans (mod, 'year', 
+                                                   at = list(year = 1993:2020), 
+                                                   type = 'response')))) %>%
+  mutate(preds = if_else(! parameter %in% c('do', 'pH'),
+                          preds,
+                          list(NA)))
 ```
 
-``` r
-for (p in nested_data$parameter) {
-  preds <- nested_data$emms[nested_data$parameter == p][[1]]
-  if (! is.na(preds[[1]])) {
-    print(plot(preds) + 
-            xlab(p) +
-            theme(axis.text.x = element_text(angle = 90, size = 9,
-                                             vjust = 0.25,
-                                             hjust = 1)) +
-            coord_flip())
-  }
-}
-#> Warning in if (!is.na(preds[[1]])) {: the condition has length > 1 and only the
-#> first element will be used
+### Check results
 
-#> Warning in if (!is.na(preds[[1]])) {: the condition has length > 1 and only the
-#> first element will be used
+Note that for the transformed models, the returned point estimate is
+“emmean”
+
+``` r
+nested_data$preds[[1]]
+#>  year emmean      SE   df lower.CL upper.CL
+#>  1993   2.32 0.02057 5150     2.28     2.36
+#>  1994   2.31 0.01950 5150     2.28     2.35
+#>  1995   2.30 0.01844 5150     2.27     2.34
+#>  1996   2.30 0.01741 5150     2.26     2.33
+#>  1997   2.29 0.01640 5150     2.25     2.32
+#>  1998   2.28 0.01543 5150     2.25     2.31
+#>  1999   2.27 0.01450 5150     2.24     2.30
+#>  2000   2.26 0.01362 5150     2.23     2.29
+#>  2001   2.25 0.01280 5150     2.22     2.27
+#>  2002   2.24 0.01205 5150     2.22     2.26
+#>  2003   2.23 0.01138 5150     2.21     2.25
+#>  2004   2.22 0.01081 5150     2.20     2.24
+#>  2005   2.21 0.01037 5150     2.19     2.23
+#>  2006   2.20 0.01005 5150     2.18     2.22
+#>  2007   2.19 0.00988 5150     2.17     2.21
+#>  2008   2.19 0.00986 5150     2.17     2.20
+#>  2009   2.18 0.01000 5150     2.16     2.20
+#>  2010   2.17 0.01028 5150     2.15     2.19
+#>  2011   2.16 0.01070 5150     2.14     2.18
+#>  2012   2.15 0.01125 5150     2.13     2.17
+#>  2013   2.14 0.01189 5150     2.12     2.16
+#>  2014   2.13 0.01263 5150     2.11     2.15
+#>  2015   2.12 0.01343 5150     2.09     2.15
+#>  2016   2.11 0.01430 5150     2.08     2.14
+#>  2017   2.10 0.01522 5150     2.07     2.13
+#>  2018   2.09 0.01619 5150     2.06     2.12
+#>  2019   2.08 0.01718 5150     2.05     2.12
+#>  2020   2.07 0.01821 5150     2.04     2.11
+#> 
+#> Results are averaged over the levels of: month, station 
+#> Confidence level used: 0.95
 ```
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-20-1.png" style="display: block; margin: auto;" />
+### Check Chlorophyll
 
-    #> Warning in if (!is.na(preds[[1]])) {: the condition has length > 1 and only the
-    #> first element will be used
-
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-20-2.png" style="display: block; margin: auto;" />
-
-    #> Warning in if (!is.na(preds[[1]])) {: the condition has length > 1 and only the
-    #> first element will be used
-
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-20-3.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-20-4.png" style="display: block; margin: auto;" />
+The point estimate is “response”
 
 ``` r
-my_plot_fxn <- function(dat, preds, label, units, ann) {
+nested_data$preds[[7]]
+#>  year response    SE  df lower.CL upper.CL
+#>  1993     4.85 0.719 416     3.59     6.45
+#>  1994     4.76 0.672 416     3.58     6.25
+#>  1995     4.67 0.627 416     3.57     6.05
+#>  1996     4.59 0.583 416     3.55     5.86
+#>  1997     4.51 0.540 416     3.54     5.68
+#>  1998     4.43 0.499 416     3.53     5.50
+#>  1999     4.35 0.460 416     3.51     5.33
+#>  2000     4.27 0.422 416     3.50     5.16
+#>  2001     4.19 0.386 416     3.48     5.00
+#>  2002     4.11 0.351 416     3.47     4.85
+#>  2003     4.04 0.319 416     3.45     4.70
+#>  2004     3.96 0.289 416     3.42     4.56
+#>  2005     3.89 0.261 416     3.40     4.43
+#>  2006     3.82 0.236 416     3.37     4.30
+#>  2007     3.74 0.215 416     3.34     4.19
+#>  2008     3.67 0.198 416     3.30     4.08
+#>  2009     3.60 0.185 416     3.25     3.98
+#>  2010     3.54 0.177 416     3.20     3.90
+#>  2011     3.47 0.175 416     3.14     3.83
+#>  2012     3.40 0.177 416     3.07     3.77
+#>  2013     3.34 0.184 416     2.99     3.71
+#>  2014     3.27 0.195 416     2.91     3.67
+#>  2015     3.21 0.208 416     2.82     3.64
+#>  2016     3.15 0.223 416     2.73     3.61
+#>  2017     3.09 0.239 416     2.64     3.58
+#>  2018     3.03 0.256 416     2.55     3.56
+#>  2019     2.97 0.274 416     2.46     3.54
+#>  2020     2.91 0.292 416     2.37     3.52
+#> 
+#> Results are averaged over the levels of: month, station 
+#> Confidence level used: 0.95 
+#> Intervals are back-transformed from the log(mu + 1) scale
+```
+
+#### Correct Chlorphyll
+
+The chlorophyll data from the three long-term sites began in 2001. We do
+not want to show predictions before that time.
+
+``` r
+pp <- nested_data %>%
+  filter(parameter == 'chl') %>%
+  pull(preds)
+pp <- pp[[1]]
+pp <- pp %>%
+  filter(year > 2000)
+
+nested_data$preds[nested_data$parameter=='chl'] <- list(pp)
+```
+
+## Create Transform Objects
+
+This allows us to automate plotting the chlorophyll data on a
+transformed y axis.
+
+``` r
+trans_list <- list(secchi_2 = 'identity',
+                   temperature = 'identity',
+                   salinity = 'identity',
+                   do = 'identity',
+                   pctsat = 'identity',
+                   pH = 'identity',
+                   chl = 'log1p')
+nested_data$transf <- trans_list
+```
+
+## Create Plotting Function
+
+``` r
+my_plot_fxn <- function(dat, preds, label = '', units = '', 
+                        ann = '', transf = 'identity') {
   
   p <- ggplot(dat, aes(x = year)) +
     geom_jitter(aes(y = value), 
                 width = 0.25, height = 0,
                 color = cbep_colors()[1], alpha = 0.2) +
-    geom_text(aes(x = 2022, y = 0.9 * max(dat$value)), 
-             label = ann, hjust = 1)
+    annotate(geom = 'text', x = 2015, y = 0.9 * max(dat$value), 
+             label = ann, hjust = .5) +
+    xlim(1993,2020) +
+    ylab(paste0(label,
+                if_else(nchar(units)> 0, ' (', ' '),
+                units, 
+                if_else(nchar(units)> 0,')', ''))) +
+    xlab('')
   
+  # here we deal with the different naming convention of emmeans 
+  # `type = 'response' for back-transforming values
   if (! is.na(preds[[1]])) {
+    pr <- preds
+    if('response' %in% names(pr)) {
+        pr <- pr %>% rename(emmean = response)
+      }
+
     p <- p + 
-      geom_ribbon(data = preds, mapping = aes(x = year, 
+      geom_ribbon(data = pr, mapping = aes(x = year, 
                                             ymin = lower.CL,
                                             ymax = upper.CL),
                 fill = 'blue',
-                alpha = 0.1) +
-      geom_line(data = preds, mapping = aes(x = year, y = emmean),
+                alpha = 0.15) +
+      geom_line(data = pr, mapping = aes(x = year, y = emmean),
               color = cbep_colors()[2], size  = 1) +
-      ylab(paste0(label, ' (', units, ')'))
+      scale_y_continuous(trans = transf)
   }
-   
   return(p)
 }
 ```
+
+# Generate Graphics
 
 When we add in the raw data, however, we can see how minor most of these
 “significant” trends are when seen against bay-wide and season-wide
@@ -917,46 +1566,68 @@ variability.
 for (p in nested_data$parameter) {
   row <- nested_data[nested_data$parameter == p,] 
   d <- row$data[[1]]
-  p <- row$emms[[1]]
+  p <- row$preds[[1]]
   l <- row$label
   u <- row$units
   a <- row$annot
-  
-  print(my_plot_fxn(d,p,l,u,a))
+  t <- row$transf
+  print(my_plot_fxn(d,p,l,u,a, t))
 }
 #> Warning in if (!is.na(preds[[1]])) {: the condition has length > 1 and only the
 #> first element will be used
-#> Warning: Use of `dat$value` is discouraged. Use `value` instead.
+#> Warning: Removed 104 rows containing missing values (geom_point).
 #> Warning in if (!is.na(preds[[1]])) {: the condition has length > 1 and only the
 #> first element will be used
 ```
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-22-1.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Trends_files/figure-gfm/generate_graphics-1.png" style="display: block; margin: auto;" />
 
-    #> Warning: Use of `dat$value` is discouraged. Use `value` instead.
-
-    #> Warning: the condition has length > 1 and only the first element will be used
-
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-22-2.png" style="display: block; margin: auto;" />
-
-    #> Warning: Use of `dat$value` is discouraged. Use `value` instead.
-
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-22-3.png" style="display: block; margin: auto;" />
-
-    #> Warning: Use of `dat$value` is discouraged. Use `value` instead.
+    #> Warning: Removed 108 rows containing missing values (geom_point).
 
     #> Warning: the condition has length > 1 and only the first element will be used
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-22-4.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Trends_files/figure-gfm/generate_graphics-2.png" style="display: block; margin: auto;" />
 
-    #> Warning: Use of `dat$value` is discouraged. Use `value` instead.
+    #> Warning: Removed 99 rows containing missing values (geom_point).
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-22-5.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Trends_files/figure-gfm/generate_graphics-3.png" style="display: block; margin: auto;" />
 
-    #> Warning: Use of `dat$value` is discouraged. Use `value` instead.
+    #> Warning: Removed 104 rows containing missing values (geom_point).
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-22-6.png" style="display: block; margin: auto;" />
+    #> Warning: the condition has length > 1 and only the first element will be used
 
-    #> Warning: Use of `dat$value` is discouraged. Use `value` instead.
+<img src="Surface_Analysis_Trends_files/figure-gfm/generate_graphics-4.png" style="display: block; margin: auto;" />
 
-<img src="Surface_Analysis_Trends_files/figure-gfm/unnamed-chunk-22-7.png" style="display: block; margin: auto;" />
+    #> Warning: Removed 100 rows containing missing values (geom_point).
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/generate_graphics-5.png" style="display: block; margin: auto;" />
+
+    #> Warning: Removed 79 rows containing missing values (geom_point).
+
+    #> Warning: the condition has length > 1 and only the first element will be used
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/generate_graphics-6.png" style="display: block; margin: auto;" />
+
+    #> Warning: Removed 14 rows containing missing values (geom_point).
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/generate_graphics-7.png" style="display: block; margin: auto;" />
+
+``` r
+row <- nested_data[nested_data$parameter == 'chl',]
+  d <- row$data[[1]]
+  p <- row$preds[[1]]
+  l <- row$label
+  u <- row$units
+  a <- row$annot
+  t <- row$transf
+plt <- my_plot_fxn(d,p,l,u,a, t)
+#> Warning in if (!is.na(preds[[1]])) {: the condition has length > 1 and only the
+#> first element will be used
+plt +
+  scale_y_continuous(trans = row$transf, breaks = c(0,1,  5, 10, 50, 100, 200))
+#> Scale for 'y' is already present. Adding another scale for 'y', which will
+#> replace the existing scale.
+#> Warning: Removed 13 rows containing missing values (geom_point).
+```
+
+<img src="Surface_Analysis_Trends_files/figure-gfm/rplot_chl-1.png" style="display: block; margin: auto;" />
