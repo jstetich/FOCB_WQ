@@ -704,7 +704,7 @@ my_plot_fxn <- function(dat, preds, label = '', units = '',
 }
 ```
 
-# Generate Graphics
+## Generate Graphics
 When we add in the raw data, however, we can see how minor most of these 
 "significant" trends are when seen against bay-wide and season-wide variability.
 ```{r generate_graphics}
@@ -721,7 +721,7 @@ for (p in nested_data$parameter) {
 ```
 
 
-
+### Revise Chlorophyll Axis
 ```{r rplot_chl}
 row <- nested_data[nested_data$parameter == 'chl',]
   d <- row$data[[1]]

@@ -1,0 +1,544 @@
+---
+title: "Analysis of Seasonal Water Quality Trends from Friends of Casco Bay Data"
+author: "Curtis C. Bohlen, Casco Bay Estuary Partnership"
+date: "3/25/2021"
+output:
+  github_document:
+    toc: true
+    fig_width: 5
+    fig_height: 4
+---
+
+<img
+    src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
+    style="position:absolute;top:10px;right:50px;" />
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.align = 'center',
+                      fig.width = 5, fig.height = 4,
+                      collapse = TRUE, comment = "#>")
+```
+
+# Introduction
+This Notebook analyzes FOCB's "Surface" data.
+These data are pulled from long term monitoring locations around the Bay.
+
+These are sites visited regularly by FOCB staff, either by boat or on land.  The 
+focus is on warm season sampling (April through October), with roughly monthly
+samples.  Earlier data from some land-based sites was collected by volunteers.
+
+This notebook builds on other analyses, which looked for overall trends in 
+water quality, by looking for "seasonal" trends.  We look for these by  defining
+seasonal variables and fitting linear interaction models
+
+We produce an "Early vs Late" factor and a three point factor for for Spring, 
+Summer, and Fall, based on the month of sampling.  However, the three season
+model is almost always better, so we fully develop analyses only for that
+version.
+
+# Load Libraries
+```{r load_libraries}
+library(tidyverse)
+library(readxl)
+
+library(mgcv)     # For `gam()` and `gamm()` models
+library(lmerTest)     # for `lmer()`
+library(emmeans)
+
+library(CBEPgraphics)
+load_cbep_fonts()
+theme_set(theme_cbep())
+```
+
+# Load Data
+## Establish Folder Reference
+```{r folder_refs}
+sibfldnm <- 'Original_Data'
+parent   <- dirname(getwd())
+sibling  <- file.path(parent,sibfldnm)
+
+dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
+```
+
+## Primary Data
+We specify column names because FOCB data has a row of names, a row of units,
+then the data.  This approach is simpler than reading names from the first
+row and correcting them to be R syntactic names.
+```{r load_data, warning = FALSE}
+fn    <- 'FOCB Surface All Current Sites With BSV Data.xlsx'
+fpath <- file.path(sibling,fn)
+
+mynames <- c('station', 'dt', 'time', 'sample_depth',
+             'secchi', 'water_depth','temperature', 'salinity',
+             'do', 'pctsat', 'pH', 'chl', 
+             'month', 'year', 'fdom', 'bga', 
+             'turbidity', 'blank', 'clouds', 'wndspd',
+             'winddir'
+             ) 
+
+the_data <- read_excel(fpath, skip=2, col_names = mynames) %>%
+  mutate(month = factor(month, levels = 1:12, labels = month.abb)) %>%
+  relocate(month, .after = dt)
+
+rm(mynames)
+```
+
+### Remove 2020 only data
+```{r remove_vars}
+the_data <- the_data %>%
+select(-c(fdom:winddir))
+```
+
+### Add Seasonal Factors
+```{r season_factors}
+the_data <- the_data %>%
+  mutate(season_2 = fct_collapse(month, 
+                                 Early = c('Apr', 'May', 'Jun'),
+                                 Late =  c('Jul', 'Aug', 'Sep', 'Oct')),
+         season_3 =  fct_collapse(month, 
+                                 Spring = c('Apr', 'May'), 
+                                 Summer = c('Jun','Jul', 'Aug'),
+                                 Fall   =  c('Sep', 'Oct'))) %>%
+  relocate(season_2, season_3, .after = month)
+```
+
+### Address Secchi Censored Values
+```{r secchi_censored}
+the_data <- the_data %>%
+  mutate(secchi_2 = if_else(secchi == "BSV", water_depth, as.numeric(secchi)),
+         bottom_flag = secchi == "BSV") %>%
+  relocate(secchi_2, .after = secchi) %>%
+  relocate(bottom_flag, .after = secchi_2)
+```
+
+### Limit Chlorophyll to Three Long-Term Stations
+```{r limit_chl_long_term}
+the_data <- the_data %>%
+  mutate(chl = if_else(station %in% c('P5BSD', 'P6FGG', 'P7CBI'),
+                                   chl, NA_real_))
+```
+
+### Transform the Chlorophyll A Data
+We create  log(X + 1) transformed version of the Chlorophyll data.  That allows 
+us to conduct analyses of transformed and untransformed data in parallel.
+
+The choice of transform for chlorophyll has significant import, as it determines
+whether chlorophyll is considered to have a significant long-term trend or not.
+This confusing situation is driven by fifteen  nominal "zero" values in the
+data from early in the data record. See 
+`Surface_Analysis_Chlorophyll_Trends.Rmd` for details.
+```{r transforms_1}
+the_data <- the_data %>%
+  mutate(log1_chl = log1p(chl)) %>%
+  relocate(log1_chl, .after = chl)
+```
+
+# Create Trend Data
+First, we create a tibble containing information on years in which each
+station was sampled.
+```{r which_years}
+years_data <- the_data %>%
+  group_by(station, year) %>%
+  summarize(yes = ! all(is.na(temperature)),
+            .groups = 'drop_last') %>%
+  summarize(years = sum(yes, na.rm = TRUE),
+            recent_years =  sum(yes & year > 2014, na.rm = TRUE),
+            .groups = 'drop')
+```
+
+Then we identify stations with at least 10 years of data, and at least three
+years of data from the last five years, and use that list to select data for
+trend analysis.  Finally, we adjust the levels in the `station` and 
+`station_name` variables.
+```{r build_trend_data}
+selected_stations <- years_data %>%
+  filter(years> 9, recent_years >2) %>%
+  pull(station)
+
+trend_data <- the_data %>%
+  filter(station %in% selected_stations) %>%
+  mutate(station = fct_drop(station)) %>%
+  mutate(station = fct_reorder(station, temperature, mean, na.rm = TRUE))
+rm(selected_stations, years_data)
+```
+
+```{r how_many}
+length(unique(trend_data$station))
+```
+
+We are reduced to only 17 stations with long-term records for trend analysis.
+We noted above that we have limited chlorophyll data before the last couple of 
+years.  We address that momentarily
+
+# Construct Nested Tibble
+```{r build_nested_data}
+units <- tibble(parameter = c('secchi_2', 'temperature', 
+                              'salinity', 'do',
+                              'pctsat', 'pH', 
+                              'chl', 'log1_chl'),
+                label = c("Secchi Depth", "Temperature",
+                         "Salinity", "Dissolved Oxygen",
+                         "Percent Saturation", "pH",
+                         "Chlorophyll A", "Log(Chlorophyll A plus 1)"),
+                units = c('m', paste0("\U00B0", "C"),
+                          'PSU', 'mg/l',
+                          '', '',
+                          'mg/l', 'mg/l'))
+
+nested_data <- trend_data %>%
+  select(-time, -sample_depth, 
+         -secchi, -water_depth) %>%
+  mutate(year_f = factor(year)) %>%
+  relocate(bottom_flag, .after = season_3) %>%
+  
+  pivot_longer(c(secchi_2:log1_chl), names_to = 'parameter', 
+               values_to = 'value') %>%
+  filter(! is.na(value)) %>%
+  
+  # This allows us to ensure the order of the rows in the nested tibble
+  mutate(parameter = factor(parameter,
+                            levels = c('secchi_2', 'temperature',
+                                       'salinity', 'do',
+                                       'pctsat', 'pH',
+                                       'chl', 'log1_chl'))) %>%
+
+  # change all `bottom_flag` values to FALSE except for secchi_2 df 
+  # this allows selective coloring in later graphics
+  mutate(bottom_flag = if_else(parameter != 'secchi_2', 
+                               NA, 
+                               bottom_flag)) %>%
+  group_by(parameter) %>%
+  nest() %>%
+  arrange(parameter) %>%
+  left_join(units, by = 'parameter')
+```
+
+# Modeling
+We treat stations as random exemplars of possible stations, and thus rely on
+hierarchical models. 
+
+
+We mostly use GAM models with a random factor smoothing term.
+We restrict ourselves to linear trends by year, but explore interactions by 
+month and season.  These seasonal models were motivated by two dimensional 
+tensor smooth GAM models developed in "Surface_Analysis_Trends.Rmd".
+
+## Models
+We develop two "Season" and two "Month" models.  The Month models generally 
+perform better, but they are difficult to summarize compactly for State of
+Casco Bay audiences.
+```{r initial_models}
+nested_data <- nested_data %>%
+  mutate(lmers = map(data, function(df) gam(value ~ year + month + 
+                                              s(station, bs = 're'), 
+                                            data = df))) %>%
+  mutate(lmers_2 = map(data, function(df) gam(value ~ year *  month + 
+                                              s(station, bs = 're'), 
+                                            data = df))) %>%
+  mutate(lmer_3_seas = map(data, function(df) gam(value ~ year + season_3 + 
+                                              s(station, bs = 're'), 
+                                            data = df))) %>%
+  mutate(lmer_3_seas_2 = map(data, function(df) gam(value ~ year * season_3 + 
+                                              s(station, bs = 're'), 
+                                            data = df))) %>%
+  mutate(lmer_mixed = map(data, function(df) gam(value ~ year + month + 
+                                                   year:season_3 + 
+                                              s(station, bs = 're'), 
+                                            data = df)))
+  
+
+  names(nested_data$lmers) <- nested_data$parameter
+  names(nested_data$lmers_2) <- nested_data$parameter
+  names(nested_data$lmer_3_seas) <- nested_data$parameter
+  names(nested_data$lmer_3_seas_2) <- nested_data$parameter
+  names(nested_data$lmer_mixed) <- nested_data$parameter
+```
+
+
+### Compare Five Models
+#### AIC
+```{r compare_aic}
+aic_list <- list()
+for (p in nested_data$parameter) {
+  row <-  nested_data[nested_data$parameter == p,]
+  aic <- c( AIC(row$lmer_3_seas[[1]]),
+            AIC(row$lmer_3_seas_2[[1]]),
+            AIC(row$lmers[[1]]),
+            AIC(row$lmer_mixed[[1]]),
+            AIC(row$lmers_2[[1]]))
+ aic_list[p] <- list(round(aic,1))
+}
+aic_arr <- do.call(rbind, aic_list)
+colnames(aic_arr) <- c('Seasons', 'Seasons w Interaction', 'Months', 
+                       'Months w Seasons','Months w Interaction')
+knitr::kable(aic_arr,)
+
+```
+
+#### ANOVAs
+```{r anovas_1}
+for (p in nested_data$parameter) {
+  row <-  nested_data[nested_data$parameter == p,]
+  ava <- anova(row$lmer_3_seas[[1]], row$lmer_3_seas_2[[1]], row$lmers[[1]], 
+               row$lmer_mixed[[1]], row$lmers_2[[1]], test = 'LRT')
+  cat('\n\n')
+  cat(p, '\n')
+  print(ava)
+}
+```
+
+Generally speaking, the month models are stronger than the season models, 
+and the interaction models are stronger than the non-interaction models.
+
+For State of Casco Bay, however, the month by month models are problematic to
+depict for a non-technical audience.
+
+So the choice of models comes down to a trade-off between model performance and 
+clarity fo the State of Casco Bay audience.  We need the interaction-based 
+models, at least for some parameters.
+
+**Full Model**
+Too complicated to depict clearly. Eight independent slopes are a lot to manage.
+
+**Model with Seasonal Slopes, Adjusted by Month**
+Works well, but lacks elegance, since it fits intercepts by one grouping and 
+slopes by another.
+
+**Season Based Model**
+Does not perform as well statistically, but is easy to visualize and explain.
+This is a useful intermediate between non-interaction models, two season
+models, and the full model.
+
+
+# Working with the Selected Model
+## Diagnostic Plots
+```{r diagnostics}
+for (p in nested_data$parameter) {
+  cat('\n')
+  cat(p)
+  cat('\n')
+  gam.check(nested_data$lmer_3_seas_2[nested_data$parameter == p][[1]],
+       sub = p)
+}
+```
+
+We have the same pathologies in these models as before. All errors are
+distributed somewhat heavy tailed, and some are also skewed.  Sample sizes are 
+large, so normal approximations are likely good, but we should not take nominal
+p values too seriously.
+
+### ANOVAs
+```{r anovas_2}
+nested_data <- nested_data %>%
+  mutate(anova_3 = map(lmer_3_seas_2, function(mod) anova(mod)))
+
+for ( p in nested_data$parameter) {
+  cat('\n\n', p, '\n')
+  print(nested_data$anova_3[nested_data$parameter == p][[1]])
+}
+```
+
+
+### Plot Marginal Means
+These means are all marginal to the identity of the stations.  It's worth noting
+that differences in slope that jump out in these graphics often vanish into
+relative insignificance when plotted against the source data.  Also, some 
+"statistically significant" differences in seasonal slopes are pretty small, on
+pretty small slopes, and thus are probably not worth interpreting.
+```{r build_interaction_plots}
+nested_data <- nested_data %>%
+  mutate(emmi_3 = map(lmer_3_seas_2, function(mod) emmip(mod, season_3 ~ year, 
+                                                        at = list(year = 1993:2020),
+                                                       plotit = FALSE)))
+```
+
+```{r plot_interactions}
+for (p in nested_data$parameter) {
+  preds <- nested_data[nested_data$parameter == p,]$emmi_3[[1]]
+ 
+  plt <-  preds %>%
+    mutate(UCL = yvar + 1.96 * SE,
+           LCL = yvar - 1.96 * SE) %>%
+    ggplot(aes(x = xvar, y = yvar, color = tvar)) +
+    geom_line() +
+    geom_ribbon(aes(ymin = LCL, ymax = UCL, fill = tvar), color = NA, alpha = 0.15) +
+    ylab(p) +
+    labs(color = '')
+  print(plt)
+}
+```
+
+*  Secchi shows significant differences in seasonal trends. 
+*  Temperatures also show significant interaction (a surprise!) 
+*  Salinity shows no significant trends or interactions.
+*  DO shows no significant trends or interactions.
+*  Pct Saturation shows a significant trend, but no significant interactions.
+*  pH shows significant trend, with interactions
+*  Chloride shows strong seasonal patterns.
+
+### Seasonal Slopes
+```{r build_slopes}
+nested_data <- nested_data %>%
+  mutate(slopes = map(lmer_3_seas_2,
+                      function(mod) summary(emtrends(mod, 
+                                                     ~ season_3, 
+                                                     var = "year")))) %>%
+  mutate(slopes_compare = map(lmer_3_seas_2,  function(mod) emtrends(mod, 
+                                                     pairwise ~ season_3, 
+                                                     var = "year")$contrasts))
+names(nested_data$slopes_compare) <- nested_data$parameter
+nested_data$slopes_compare
+```
+
+
+*  secchi:       Spring declines less than fall.
+*  temperature:  Summer increases less than fall
+*  salinity:     No differences 
+*  do:           No differences 
+*  pctsat:       No differences 
+*   pH           Spring pH increased, both summer and fall decreased
+*  chl           Spring declined  faster than fall.
+*  log1_chl      Spring declined faster than summer or fall.
+
+
+# Graphics
+
+## Simply overplot data
+
+### Plots
+We could construct this as a function, but the for loop is a bit faster to
+develop.
+```{r make_plots, fig.width = 4, fig.height = 3.5}
+for (p in nested_data$parameter) {
+  row <- nested_data[nested_data$parameter == p,]
+  dat <- row$data[[1]]
+  preds <- row$emmi_3[[1]]
+  label <- row$label
+  units <- row$units
+  
+  preds <-  preds %>%
+    mutate(UCL = yvar + 1.96 * SE,
+           LCL = yvar - 1.96 * SE)
+  
+  plt <-    ggplot() +
+    geom_jitter(mapping = aes(year, value, color = season_3), data = dat, 
+                alpha = 0.1, width = 0.25) +
+    
+    geom_line(mapping = aes(x = xvar, y = yvar, color = tvar), data = preds,
+              size = 1) +
+    #geom_ribbon(aes(x = xvar, ymin = LCL, ymax = UCL, fill = tvar), data = preds,
+    #            color = NA, alpha = 0.15) +
+    
+    guides(fill = 'none') +
+    scale_color_manual(values = cbep_colors2()[c(1,2,4)],
+                       name = '',
+                guide = guide_legend(override.aes = list(alpha = 1))) +
+    scale_fill_manual(values = cbep_colors2()[c(1,2,4)]) +
+    
+    theme_cbep(base_size = 14) +
+    theme(legend.position = 'bottom',
+          axis.title.y = element_text(size = 12),
+          axis.line = element_line(color = 'gray85')) +
+
+    ylab(paste0(label, 
+                if_else(nchar(units) > 0, ' (',''),
+                units,
+                if_else(nchar(units) > 0, ')',''))) +
+    xlab('') +
+    labs(color = '')
+  print(plt)
+}
+```
+
+### Fix the Chlorophyll Models and Graphic
+We need to plot the chlorophyll data on a transformed axis, which takes several
+steps.
+
+1.  Refit the model, including the transformation in the model  
+2.  Extract marginal trends from the revised model with `type == "response"`  
+3.  Redraw the plot, with an added transformation on the Y axis, while
+    controlling the locations of the breaks.
+
+```{r pull_chl_data_again}
+dat <- nested_data %>%
+  filter(parameter == 'chl') %>%
+  pull(data)                # Returns a list
+dat <- dat[[1]]             # Extract the first item....  df is now a data frame
+anyNA(dat$value)
+```
+
+`emmeans` recognizes the log(value + 1) transform, but it does not recognize the 
+equivalent log1p() transform.  
+```{r refit_chl_models}
+new_mod_2 <- gam(log(value + 1) ~ year * season_2 + 
+                  s(station, bs = 're'), 
+                data = dat)
+new_mod_3 <- gam(log(value + 1) ~ year * season_3 + 
+                  s(station, bs = 're'), 
+                data = dat)
+
+pred <- emmip(new_mod_3, season_3 ~ year, 
+             at = list(year = 1993:2020), type = 'response',
+             plotit = FALSE) %>%
+  filter(year > 2000)
+```
+
+We copy results into the nested tibble. We omit two values where the results
+on the back-transformed scale are less reliable.
+```{r replace_chl_models}
+nested_data$lmer_2_seas[nested_data$parameter == 'chl'] <- list(new_mod_2)
+nested_data$lmer_3_seas_2[nested_data$parameter == 'chl'] <- list(new_mod_3)
+nested_data$compare[nested_data$parameter == 'chl'] <- list(NA)
+nested_data$anova_3[nested_data$parameter == 'chl'] <- list(anova(new_mod_3))
+nested_data$emmi_3[nested_data$parameter == 'chl'] <- list(pred)
+nested_data$slopes[nested_data$parameter == 'chl'] <- list(NA)
+nested_data$slopes_compare[nested_data$parameter == 'chl'] <- list(NA)
+```
+
+#### Updated Chlorophyll Plot  
+The primary change in the code here is addition of 
+`scale_y_continuous(trans = 'log1p')`.  Unlike emmeans, ggplot recognizes the 
+transform.  We also have to explicitly control the x axis to match the other
+plots.
+```{r fix_chl_plot, fig.width = 4, fig.height = 3.5}
+row <- nested_data[nested_data$parameter == 'chl',]
+  dat <- row$data[[1]]
+  preds <- row$emmi_3[[1]]
+  label <- row$label
+  units <- row$units
+  
+  preds <-  preds %>%
+    mutate(UCL = yvar + 1.96 * SE,
+           LCL = yvar - 1.96 * SE)
+  
+  plt <-  ggplot() +
+    geom_jitter(mapping = aes(year, value, color = season_3), data = dat, 
+                alpha = 0.1, width = 0.25) +
+    
+    geom_line(mapping = aes(x = xvar, y = yvar, color = tvar), data = preds,
+              size = 1) +
+    #geom_ribbon(aes(x = xvar, ymin = LCL, ymax = UCL, fill = tvar), data = preds,
+    #            color = NA, alpha = 0.15) +
+    
+    guides(fill = 'none') +
+    scale_color_manual(values = cbep_colors2()[c(1,2,4)],
+                       name = '',
+                guide = guide_legend(override.aes = list(alpha = 1))) +
+    scale_fill_manual(values = cbep_colors2()[c(1,2,4)]) +
+    
+    theme_cbep(base_size = 14) +
+    theme(legend.position = 'bottom',
+          axis.title.y = element_text(size = 12),
+          axis.line = element_line(color = 'gray85')) +
+
+    ylab(paste0(label, 
+                if_else(nchar(units) > 0, ' (',''),
+                units,
+                if_else(nchar(units) > 0, ')',''))) +
+    xlab('') +
+    labs(color = '') +
+    xlim(1993, 2020) +
+    scale_y_continuous(trans = 'log1p', breaks = c(0,1,  5, 10, 50, 100, 200))
+  print(plt)
+```
+
