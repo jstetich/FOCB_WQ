@@ -3,10 +3,11 @@ GIS Analysis
 #  Source Data
 ## Monitoring Locations
 The shapefile 'monitoring_locations' was derived from the Excel spreadsheet 
-"FOCB Monitoring Sites.xlsx" in the Original FData Folder.  This file does not 
+"FOCB Monitoring Sites.xlsx" in the Original_Data folder.  This file does not 
 include geographic information for the "CMS3" station, which FOCB began using 
-in 2020.
-
+in 2020.  We added the 'Short_Name' attribute by hand in ArcGIS. It mirrors 
+data in the Excel File "FOCB Monitoring Sites SHORT NAMES.xlsx" in the 
+Derived_Data folder.
 
 #  Near Impervious Cover Estimates
 Impervious cover estimates (calculated only for station locations) were
