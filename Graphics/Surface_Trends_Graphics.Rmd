@@ -27,14 +27,12 @@ These are sites visited regularly by FOCB staff, either by boat or on land.  The
 focus is on warm season sampling (April through October), with roughly monthly
 samples.  Earlier data from some land-based sites was collected by volunteers.
 
-This notebook builds on other analyses, which looked for overall trends in 
-water quality, by looking for "seasonal" trends.  We look for these by  defining
-seasonal variables and fitting linear interaction models
+This notebook builds on other analyses, which looked for overall trends and
+"seasonal" trends in water quality.  Here we develop possible graphics to
+present results of those analyses.
 
-We produce an "Early vs Late" factor and a three point factor for for Spring, 
-Summer, and Fall, based on the month of sampling.  However, the three season
-model is almost always better, so we fully develop analyses only for that
-version.
+We produce an a three point factor for for Spring,  Summer, and Fall, based on 
+the month of sampling, so we can show seasonal as well as overall trends.
 
 # Load Libraries
 ```{r load_libraries}
@@ -675,18 +673,16 @@ for (p in nested_data$parameter) {
                    label = myglyphs[1], color = 'red4',
                    size = 7)
         }
-        else {
-          annotate('text_npc', npcx = 'left', npcy = 'top',
-                   label = myglyphs[2], color = 'gray50',
-                   size = 7)          
-        }
+        # else {
+        #   annotate('text_npc', npcx = 'left', npcy = 'top',
+        #            label = myglyphs[2], color = 'gray50',
+        #            size = 7)          
+        # }
   )
   
 }
 
 ```
-
-
 
 # Add Both
 ```{r final_graphics, fig.width = 3.5, fig.height = 3.25}
@@ -707,11 +703,11 @@ for (p in nested_data$parameter) {
                    label = myglyphs[1], color = 'red4',
                    size = 7)
         }
-        else {
-          annotate('text_npc', npcx = 'left', npcy = 'top',
-                   label = myglyphs[2], color = 'gray50',
-                   size = 7)          
-        }
+        # else {
+        #   annotate('text_npc', npcx = 'left', npcy = 'top',
+        #            label = myglyphs[2], color = 'gray50',
+        #            size = 7)          
+        # }
   )
   fn <- paste0('focb_s_trend_', p, '.pdf')
   fp <- file.path('figures', fn)

@@ -60,13 +60,12 @@ roughly monthly samples. Earlier data from some land-based sites was
 collected by volunteers.
 
 This notebook builds on other analyses, which looked for overall trends
-in water quality, by looking for “seasonal” trends. We look for these by
-defining seasonal variables and fitting linear interaction models
+and “seasonal” trends in water quality. Here we develop possible
+graphics to present results of those analyses.
 
-We produce an “Early vs Late” factor and a three point factor for for
-Spring, Summer, and Fall, based on the month of sampling. However, the
-three season model is almost always better, so we fully develop analyses
-only for that version.
+We produce an a three point factor for for Spring, Summer, and Fall,
+based on the month of sampling, so we can show seasonal as well as
+overall trends.
 
 # Load Libraries
 
@@ -1012,7 +1011,7 @@ row <- nested_data[nested_data$parameter == 'chl',]
     xlim(1993, 2020) +
     scale_y_continuous(trans = 'log1p', breaks = c(0,1,  5, 10, 50, 100, 200))
   print(plt)
-#> Warning: Removed 14 rows containing missing values (geom_point).
+#> Warning: Removed 12 rows containing missing values (geom_point).
 ```
 
 <img src="Surface_Trends_Graphics_files/figure-gfm/fix_chl_plot-1.png" style="display: block; margin: auto;" />
@@ -1077,7 +1076,7 @@ for (p in nested_data$parameter) {
 
 <img src="Surface_Trends_Graphics_files/figure-gfm/demo_annot-1.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_annot-2.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_annot-3.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_annot-4.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_annot-5.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_annot-6.png" style="display: block; margin: auto;" />
 
-    #> Warning: Removed 14 rows containing missing values (geom_point).
+    #> Warning: Removed 12 rows containing missing values (geom_point).
 
 <img src="Surface_Trends_Graphics_files/figure-gfm/demo_annot-7.png" style="display: block; margin: auto;" />
 
@@ -1219,11 +1218,11 @@ for (p in nested_data$parameter) {
                    label = myglyphs[1], color = 'red4',
                    size = 7)
         }
-        else {
-          annotate('text_npc', npcx = 'left', npcy = 'top',
-                   label = myglyphs[2], color = 'gray50',
-                   size = 7)          
-        }
+        # else {
+        #   annotate('text_npc', npcx = 'left', npcy = 'top',
+        #            label = myglyphs[2], color = 'gray50',
+        #            size = 7)          
+        # }
   )
   
 }
@@ -1231,7 +1230,7 @@ for (p in nested_data$parameter) {
 
 <img src="Surface_Trends_Graphics_files/figure-gfm/demo_symbols-1.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_symbols-2.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_symbols-3.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_symbols-4.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_symbols-5.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_symbols-6.png" style="display: block; margin: auto;" />
 
-    #> Warning: Removed 14 rows containing missing values (geom_point).
+    #> Warning: Removed 12 rows containing missing values (geom_point).
 
 <img src="Surface_Trends_Graphics_files/figure-gfm/demo_symbols-7.png" style="display: block; margin: auto;" />
 
@@ -1255,11 +1254,11 @@ for (p in nested_data$parameter) {
                    label = myglyphs[1], color = 'red4',
                    size = 7)
         }
-        else {
-          annotate('text_npc', npcx = 'left', npcy = 'top',
-                   label = myglyphs[2], color = 'gray50',
-                   size = 7)          
-        }
+        # else {
+        #   annotate('text_npc', npcx = 'left', npcy = 'top',
+        #            label = myglyphs[2], color = 'gray50',
+        #            size = 7)          
+        # }
   )
   fn <- paste0('focb_s_trend_', p, '.pdf')
   fp <- file.path('figures', fn)
@@ -1271,8 +1270,8 @@ for (p in nested_data$parameter) {
 
 <img src="Surface_Trends_Graphics_files/figure-gfm/final_graphics-1.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/final_graphics-2.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/final_graphics-3.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/final_graphics-4.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/final_graphics-5.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/final_graphics-6.png" style="display: block; margin: auto;" />
 
-    #> Warning: Removed 14 rows containing missing values (geom_point).
+    #> Warning: Removed 12 rows containing missing values (geom_point).
 
-    #> Warning: Removed 14 rows containing missing values (geom_point).
+    #> Warning: Removed 12 rows containing missing values (geom_point).
 
 <img src="Surface_Trends_Graphics_files/figure-gfm/final_graphics-7.png" style="display: block; margin: auto;" />
