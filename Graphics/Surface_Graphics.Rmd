@@ -1,5 +1,5 @@
 ---
-title: "Graphics for Surface Data from Casco Bay Monitoring"
+title: "Graphics for Surface Data from Casco Bay Monitoring - Version 1"
 author: "Curtis C. Bohlen, Casco Bay Estuary Partnership"
 date: "3/03/2021"
 output:
@@ -20,17 +20,19 @@ knitr::opts_chunk$set(fig.align = 'center',
 ```
 
 # Introduction
-This Notebook analyzes Secchi depth data received from FOCB's "Surface" data.
-These data are pulled from long term monitoring locations around the Bay.
-This reflects only a small portion of FOCB's monitoring
-program, but it is the program with the deepest historical record.
+This Notebook analyzes FOCB's "Surface" data. These data are pulled from long 
+term monitoring locations around the Bay. Data, as suggested by the name of the 
+data subset, is collected at the surface of the water. (Other data, from depth, 
+are also available, but not evaluated here.)
 
-Secchi Depth data provides a good estimate of water clarity, but the data 
-can be biased by inability to observe Secchi depths when the water is 
-shallower than where the Secchi disk disappears in the water column. Is is 
-important to realize that a Secchi disk on the bottom is NOT the same as a lack 
-of data - -after all, you know the water was at least clear enough to see the 
-disk that far down.
+These are sites visited regularly by FOCB staff, either by boat or on land.  The 
+focus is on warm season sampling (April through October), with roughly monthly
+samples.  Earlier data from some land-based sites was collected by volunteers.
+
+This notebook focuses on developing graphics for the "State of Casco Bay" 
+report, not on detailed statistical analyses. The central challenge is that we 
+are trying to find ways to summarize seven water quality variables, measured at
+twenty three locations, in a compact and easy to follow format.
 
 # Load Libraries
 ```{r load_libraries}
@@ -83,13 +85,13 @@ rm(mynames)
 ```
 
 ### Remove 2020 only data
-```{r}
+```{r remove_late_data_types}
 the_data <- the_data %>%
 select(-c(fdom:winddir))
 ```
 
 ## Add Station Names
-```{r}
+```{r add_station_names}
 fn    <- 'FOCB Monitoring Sites.xlsx'
 fpath <- file.path(sibling,fn)
 loc_data <- read_excel(fpath) %>%
@@ -105,11 +107,10 @@ the_data <- the_data %>%
   relocate(month, .after = year)
 ```
 
-
 Our data contains two stations that are not associated with 
 locations that were included in our spatial data.  We can see that because
 when we `left_join()` by `station`, no `station_name` value is carried over.
-```{r}
+```{r test_station_names}
 l <- the_data %>%
   group_by(station) %>%
   summarize(missing = sum(is.na(station_name))) %>%
@@ -122,13 +123,15 @@ If we look at those records, on is represented by only a single observation, and
 the other only by data from 2020.  Neither matter for the current analysis. They
 will get filtered out when we select data to describe recent conditions, and 
 trends.
-```{r}
+```{r remove_unused_stations}
 the_data %>%
   filter(station %in% l)
 ```
 
 ## Address Secchi Censored Values
-```{r}
+Note we do NOT use maximum likelihood estimators of censored Secchi depth,
+as censored values are relatively rare, and do not affect median values.
+```{r secchi_censoring}
 the_data <- the_data %>%
   mutate(secchi_2 = if_else(secchi == "BSV", water_depth, as.numeric(secchi)),
          bottom_flag = secchi == "BSV") %>%
@@ -138,47 +141,12 @@ the_data <- the_data %>%
 
 ## Create Recent Data
 We filter to the last five FULL years of data, 2015 through 2019.
-```{r}
+```{r pull_recent}
 recent_data <- the_data %>%
   filter(year > 2014 & year < 2020) %>%
   mutate(station = fct_reorder(station, temperature, median, na.rm = TRUE),
          station_name = fct_reorder(station_name, temperature, median, na.rm = TRUE))
 ```
-
-
-## Create Trend Data
-First, we create a tibble containing information on years in which each
-station was sampled.
-```{r}
-years_data <- the_data %>%
-  group_by(station, year) %>%
-  summarize(yes = ! all(is.na(temperature)),
-            .groups = 'drop_last') %>%
-  summarize(years = sum(yes, na.rm = TRUE),
-            recent_years =  sum(yes & year > 2014, na.rm = TRUE),
-            .groups = 'drop')
-  
-```
-
-Then we identify stations with at least 10 years of data, and at least three
-years of data from the last five years, and use that list to select data for
-trend analysis.  Finally, we adjust the levels in the `station` and 
-`station_name` variables.
-```{r}
-selected_stations <- years_data %>%
-  filter(years> 9, recent_years >2) %>%
-  pull(station)
-
-trend_data <- the_data %>%
-  filter(station %in% selected_stations) %>%
-  mutate(station = fct_drop(station),
-         station_name = fct_drop(station_name)) %>%
-  mutate(station = fct_reorder(station, temperature, median, na.rm = TRUE),
-         station_name = fct_reorder(station_name, temperature, median, na.rm = TRUE))
-rm(selected_stations, years_data)
-```
-
-We are reduced to only 17 stations with long-term records for trend analysis.
 
 # Recent Conditions
 In 2015, we presented marginal means and standard errors for sixteen different
@@ -196,7 +164,7 @@ To run parallel analyses on nested tibbles, we will need to reorganize the
 data so that we can analyze along parameters.  We add a list of labels and
 measurement units to simplify later labeling of plots.
 
-```{r}
+```{r create_nested}
 units <- tibble(parameter = c('secchi_2', 'temperature', 
                               'salinity', 'do',
                               'pctsat', 'pH', 
@@ -238,7 +206,7 @@ Since this function relies on the data (not predictions), we need to force it to
 plot nothing for any station for which data is missing. We do that by using 
 `left_join()` to add complete lists of all possible `station` and `station_name` 
 values.
-```{r}
+```{r Jitter_plot_fxn}
 jitter_plot <- function(.data, .label, .units = '', .min = NA, .max = NA) {
   
   # Units and Labels
@@ -283,7 +251,7 @@ jitter_plot <- function(.data, .label, .units = '', .min = NA, .max = NA) {
 }
 ```
 
-```{r}
+```{r test_jitter_plot}
 tmp <- nested_data %>%
   filter(parameter =='chl')
          
@@ -296,7 +264,7 @@ print(p)
 ## Violin Chart
 This plot also shows medians and the interquartile range.  It does not
 use the models and predictions.
-```{r}
+```{r violin_fxn}
 violin_plot <- function(.data, .label, .units, .min = NA, .max = NA) {
   
   # Units and Labels
@@ -338,7 +306,7 @@ violin_plot <- function(.data, .label, .units, .min = NA, .max = NA) {
 }
 ```
 
-```{r fig.width = 5, fig.height = 4}
+```{r test_violin, fig.width = 5, fig.height = 4}
 tmp <- nested_data %>%
   filter(parameter =='chl')
 dat <- tmp$data[[1]]
@@ -351,7 +319,7 @@ graphic is widened somewhat, allowing the violins to spread out more.
 
 ## Bar Plot
 This bar plot is also based on the underlying data
-```{r}
+```{r barplot_fxn}
 bar_plot <- function(.data, .label, .units, .min = NA, .max = NA) {
   # Units and Labels
   yaxislabs = paste0(.label, if_else((! is.na(.units) & ! nchar(.units) == 0),
@@ -396,7 +364,7 @@ bar_plot <- function(.data, .label, .units, .min = NA, .max = NA) {
 }
 ```
 
-```{r}
+```{r test_barplot}
 p <- bar_plot(dat, tmp$label, tmp$units)
 print(p)
 ```
@@ -415,7 +383,7 @@ my_lims <- tribble( ~parameter, ~minim, ~maxim,
 ```
 
 ## All Jitter Plots
-```{r fig.width = 4.5, fig.height = 3.25}
+```{r all_jitters, fig.width = 4.5, fig.height = 3.25}
 for (p in nested_data$parameter) {
   sel <- nested_data %>%
     filter(parameter == p)
@@ -435,7 +403,7 @@ for (p in nested_data$parameter) {
 ```
 
 ## All Violin Plots
-```{r fig.width = 4, fig.height = 3.25}
+```{r all_violins, fig.width = 4, fig.height = 3.25}
 for (p in nested_data$parameter) {
   sel <- nested_data %>%
     filter(parameter == p)
@@ -455,7 +423,7 @@ for (p in nested_data$parameter) {
 ```
 
 ## All Bar Plots
-```{r fig.width = 3.5, fig.height = 3.25}
+```{r all_bars, fig.width = 3.5, fig.height = 3.25}
 for (p in nested_data$parameter) {
   sel <- nested_data %>%
     filter(parameter == p)
@@ -479,9 +447,9 @@ It would be nice to wrap those graphics up in a faceted format, principally
 to simplify axis labels.
 
 ## Define Labels and Units
-We need a single dataframe containing all the data, and a convenient way 
+We need a single data frame containing all the data, and a convenient way 
 to label things correctly.
-```{r}
+```{r facets_dataframe}
 units <- tibble(parameter = c('secchi_2', 'temperature', 
                               'salinity', 'do',
                               'pctsat', 'pH', 
@@ -497,7 +465,7 @@ units <- tibble(parameter = c('secchi_2', 'temperature',
 ```
 
 ## New Facet Labels
-```{r}
+```{r facet_labels}
 labs <- paste0(units$label, 
                            if_else((! is.na(units$units) & 
                                       ! nchar(units$units) == 0),
@@ -506,7 +474,7 @@ names(labs) <- units$parameter
 ```
 
 ## Reorganize and Select Data
-```{r}
+```{r reorganize_facet_data}
 list_df <- nested_data$data
 names(list_df) <-  nested_data$parameter
 
@@ -522,7 +490,7 @@ data_sel <- data_all %>%
 
 ## Jitter Plot
 ### Initial Draft
-```{r}
+```{r draft_facet_jitter}
  p <- ggplot(data_sel, aes(x = station_name, y = value)) +
     geom_jitter(width = 0.3, height = 0, color = cbep_colors()[1], alpha = 0.5) +
     stat_summary(fun.data = function(.x) median_hilow(.x, conf.int = .5),
@@ -538,7 +506,7 @@ data_sel <- data_all %>%
           axis.ticks.length.x = unit(0, 'cm'))
 ```
 
-```{r fig.width = 7, fig.height = 5}
+```{r two_by_two_jitter, fig.width = 7, fig.height = 5}
 p + facet_wrap(~Parameter, 
                scale = 'free_y',
                labeller = labeller(Parameter = labs))
@@ -553,8 +521,7 @@ the median and interquartile range, then trim the data, and replot.
 
 #### Reorganize and Select Data - Again
 ##### Limit data to selected parameters
-```{r}
-
+```{r selected_data_subset}
 reduced_df <- nested_data %>%
   filter(parameter %in% c('temperature', 'secchi_2', 'do', 
                           'chl'))
@@ -564,7 +531,7 @@ reduced_df <- nested_data %>%
 We need to calculate our selected summaries of location and scale, here the 
 median and interquartile ranges. We calculate them based on the full data, not 
 based on the reduced data points we will actually plot.
-```{r}
+```{r calculate_summaries}
 summrys <- data_sel %>%
 group_by(Parameter, station) %>%
 summarize(station_name = first(station_name),
@@ -577,13 +544,13 @@ summarize(station_name = first(station_name),
 ```
 
 We now delete all points with a chlorophyll value over 20.
-```{r}
+```{r delete_high_chlorophyll}
 data_sel_2 <- data_sel %>%
   filter ( ! (Parameter == 'chl' & value > 20) )
 ```
 
 #### Revised Plots
-```{r}
+```{r draft_revised_jitter}
 p <- ggplot(data_sel_2, aes(x = station_name, y = value)) +
   geom_jitter(width = 0.3, height = 0, color = cbep_colors()[1], alpha = 0.5) +
  
@@ -603,13 +570,13 @@ p <- ggplot(data_sel_2, aes(x = station_name, y = value)) +
           axis.ticks.length.x = unit(0, 'cm'))
 ```
 
-```{r fig.width = 7, fig.height = 5}
+```{r revised_two_by_two_jitter, fig.width = 7, fig.height = 5}
 p + facet_wrap(~Parameter, 
                scale = 'free_y',
                labeller = labeller(Parameter = labs))
 ggsave('figures/surface_4_wide_jitter.pdf', device = cairo_pdf, width = 7, height = 5)
 ```
-```{r fig.height = 8, fig.width = 3.75}
+```{r revised_one_by_four_jitter, fig.height = 8, fig.width = 3.75}
 p + facet_wrap(~Parameter, 
                scale = 'free_y',
                nrow = 4,
@@ -622,7 +589,7 @@ ggsave('figures/surface_4_long_jitter.pdf', device = cairo_pdf, width = 3.5, hei
 The inability to control the Y axis is again problematic, but we now have a
 viable solution.  
 
-```{r}
+```{r draft_two_by_two_violin}
  p <- ggplot(data_sel_2, aes(station_name, value)) +
     geom_violin(width = 2, scale = "count", fill = cbep_colors()[6]) +
     geom_pointrange(mapping= aes(y = y, ymin = ymin, ymax = ymax),
@@ -639,7 +606,7 @@ viable solution.
           axis.ticks.length.x = unit(0, 'cm'))
 ```
 
-```{r fig.width = 7, fig.height = 5}
+```{r two_by_two_violin, fig.width = 7, fig.height = 5}
 p + facet_wrap(~Parameter, 
                scale = 'free_y',
                labeller = labeller(Parameter = labs))
@@ -647,7 +614,7 @@ p + facet_wrap(~Parameter,
 ggsave('figures/surface_4_wide_violin.pdf', device = cairo_pdf, width = 7, height = 5)
 ```
 
-```{r fig.height = 8, fig.width = 3.75}
+```{r one_by_four_violin, fig.height = 8, fig.width = 3.75}
 p + facet_wrap(~Parameter, 
                scale = 'free_y',
                nrow = 4,
@@ -659,7 +626,7 @@ ggsave('figures/surface_4_long_violin.pdf', device = cairo_pdf, width = 3.5, hei
 ## Bar Chart
 Here the situation is a bit easier, as we do not have to plot the extreme
 outliers, and only show medians and the interquartile range.
-```{r}
+```{r draft_two_by_two_bar}
 p <- ggplot(data_sel, aes(x = station_name, y = value)) +
     stat_summary(fun = median, na.rm = TRUE,
                  geom = 'bar',
@@ -678,7 +645,7 @@ p <- ggplot(data_sel, aes(x = station_name, y = value)) +
           axis.ticks.length.x = unit(0, 'cm'))
 ```
 
-```{r fig.width = 7, fig.height = 5}
+```{r two_by_two_bar, fig.width = 7, fig.height = 5}
 p + facet_wrap(~Parameter, 
                scale = 'free_y',
                labeller = labeller(Parameter = labs))
@@ -686,7 +653,7 @@ p + facet_wrap(~Parameter,
 ggsave('figures/surface_4_wide_bar.pdf', device = cairo_pdf, width = 7, height = 5)
 ```
 
-```{r fig.height = 8, fig.width = 3.5}
+```{r one_by_four_bar, fig.height = 8, fig.width = 3.5}
 p + facet_wrap(~Parameter, 
                scale = 'free_y',
                nrow = 4,
