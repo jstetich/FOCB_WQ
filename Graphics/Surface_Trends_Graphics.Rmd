@@ -561,15 +561,11 @@ for (p in nested_data$parameter) {
                  size = 3.5))
 
 }
-
 ```
-
-
 
 # Symbols
 In the upper left, we want to offer symbols to signal improving or worsening
 .conditions.  Here we search for some suitable unicode glyphs.
-
 
 Could use "troubling" and "hopeful" to describe trends...
 ```{r symbol_words}
@@ -583,7 +579,6 @@ c('worse',
   'better')
 nested_data$symbols <- factor(symbols, levels = c('worse', 'steady', 'better'))
 ```
-
 
 The challenge we face is that we are already using a color scale for or core
 symbols.  what we want to do here is place a glyph without using a 

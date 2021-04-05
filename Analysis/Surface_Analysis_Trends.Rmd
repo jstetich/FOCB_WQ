@@ -720,7 +720,6 @@ for (p in nested_data$parameter) {
 }
 ```
 
-
 ### Revise Chlorophyll Axis
 ```{r rplot_chl}
 row <- nested_data[nested_data$parameter == 'chl',]
