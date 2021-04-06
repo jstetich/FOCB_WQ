@@ -1,11 +1,11 @@
-Graphics for Surface Data from Casco Bay Monitoring - Version 1
+Graphics for Surface Data from Casco Bay Monitoring - Version 2
 ================
 Curtis C. Bohlen, Casco Bay Estuary Partnership
 3/03/2021
 
 -   [Introduction](#introduction)
 -   [Load Libraries](#load-libraries)
--   [Load Data](#load-data)
+-   [Part 1: Load and Organize Data](#part-1-load-and-organize-data)
     -   [Establish Folder Reference](#establish-folder-reference)
     -   [Primary Data](#primary-data)
         -   [Remove 2020 only data](#remove-2020-only-data)
@@ -13,27 +13,22 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
     -   [Address Secchi Censored
         Values](#address-secchi-censored-values)
     -   [Create Recent Data](#create-recent-data)
--   [Recent Conditions](#recent-conditions)
     -   [Create Nested Tibble](#create-nested-tibble)
--   [Standardize Plotting with
-    Functions](#standardize-plotting-with-functions)
-    -   [Jitter Plot](#jitter-plot)
-    -   [Violin Chart](#violin-chart)
-    -   [Bar Plot](#bar-plot)
--   [All Draft Plots](#all-draft-plots)
-    -   [Automating Labels and Limits](#automating-labels-and-limits)
-    -   [All Jitter Plots](#all-jitter-plots)
-    -   [All Violin Plots](#all-violin-plots)
-    -   [All Bar Plots](#all-bar-plots)
--   [Faceted Graphics](#faceted-graphics)
+    -   [Reorganize and Select Data](#reorganize-and-select-data)
+-   [Part 2: Faceted Graphics](#part-2-faceted-graphics)
     -   [Define Labels and Units](#define-labels-and-units)
     -   [New Facet Labels](#new-facet-labels)
-    -   [Reorganize and Select Data](#reorganize-and-select-data)
-    -   [Jitter Plot](#jitter-plot-1)
-        -   [Initial Draft](#initial-draft)
-        -   [Revised Draft](#revised-draft)
-    -   [Violin Chart](#violin-chart-1)
+    -   [Draft Jitter Plot](#draft-jitter-plot)
+    -   [Fixing the Chlorophyll Y Axis](#fixing-the-chlorophyll-y-axis)
+    -   [Revised Jitter Plot](#revised-jitter-plot)
+    -   [Violin Chart](#violin-chart)
     -   [Bar Chart](#bar-chart)
+-   [Alternates to the Facet Bar
+    Chart](#alternates-to-the-facet-bar-chart)
+    -   [Revised Bar Chart Function](#revised-bar-chart-function)
+    -   [Automating Limits](#automating-limits)
+    -   [All Bar Plots](#all-bar-plots)
+-   [Temperature / DO Graph](#temperature-do-graph)
 
 <img
     src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
@@ -52,10 +47,24 @@ roughly monthly samples. Earlier data from some land-based sites was
 collected by volunteers.
 
 This notebook focuses on developing graphics for the “State of Casco
-Bay” report, not on detailed statistical analyses. The central challenge
-is that we are trying to find ways to summarize seven water quality
-variables, measured at twenty three locations, in a compact and easy to
-follow format.
+Bay” report, not on detailed statistical analyses. In particular, this
+notebook develops graphics showing current status of water quality at
+different locations.
+
+The central design challenge is that we are trying to find ways to
+summarize six (seven) water quality variables, measured at twenty three
+locations, over a period of years. We need graphics that are compact and
+easy to follow. We also want the graphics to be directly comparable to
+the graphics developed to look at long-term trends in these same water
+quality parameters.
+
+This version makes several changes from the draft surface graphics
+notebook.  
+First, is simplifies and standardizes Station names. Second, it uses
+facet graphics to show status of six variables and it adds a temperature
+by dissolved oxygen graphic. We also found ways to integrate transformed
+chlorophyll axes into facet plots, which we use her and in the companion
+“Surface\_Trends\_Graphics.Rmd” notebook.
 
 # Load Libraries
 
@@ -70,26 +79,13 @@ library(tidyverse)
 #> x dplyr::filter() masks stats::filter()
 #> x dplyr::lag()    masks stats::lag()
 library(readxl)
-#library(readr)
-
-#library(mgcv)
-#library(maxLik)
-
-library(GGally)
-#> Registered S3 method overwritten by 'GGally':
-#>   method from   
-#>   +.gg   ggplot2
-#library(zoo)
-#library(lubridate)  # here, for the make_datetime() function
-
-library(broom)
 
 library(CBEPgraphics)
 load_cbep_fonts()
 theme_set(theme_cbep())
 ```
 
-# Load Data
+# Part 1: Load and Organize Data
 
 ## Establish Folder Reference
 
@@ -133,12 +129,16 @@ select(-c(fdom:winddir))
 ## Add Station Names
 
 ``` r
-fn    <- 'FOCB Monitoring Sites.xlsx'
+sibfldnm <- 'Derived_Data'
+parent   <- dirname(getwd())
+sibling  <- file.path(parent,sibfldnm)
+
+fn    <- 'FOCB Monitoring Sites SHORT NAMES.xlsx'
 fpath <- file.path(sibling,fn)
 loc_data <- read_excel(fpath) %>%
-  select(Station_ID, Station_Name) %>%
+  select(Station_ID, Alt_Name) %>%
   rename(station = Station_ID,
-         station_name = Station_Name)
+         station_name = Alt_Name)
 
 the_data <- the_data %>%
   left_join(loc_data, by = 'station') %>%
@@ -146,86 +146,57 @@ the_data <- the_data %>%
   
   relocate(year, .after = dt) %>%
   relocate(month, .after = year)
+rm(loc_data)
 ```
 
 Our data contains two stations that are not associated with locations
-that were included in our spatial data. We can see that because when we
-`left_join()` by `station`, no `station_name` value is carried over.
-
-``` r
-l <- the_data %>%
-  group_by(station) %>%
-  summarize(missing = sum(is.na(station_name))) %>%
-  filter(missing > 0) %>%
-  pull(station)
-l
-#> [1] "CMS3"  "P6CBI"
-```
-
-If we look at those records, on is represented by only a single
-observation, and the other only by data from 2020. Neither matter for
-the current analysis. They will get filtered out when we select data to
-describe recent conditions, and trends.
-
-``` r
-the_data %>%
-  filter(station %in% l)
-#> # A tibble: 7 x 15
-#>   station station_name dt                   year month time               
-#>   <chr>   <chr>        <dttm>              <dbl> <dbl> <dttm>             
-#> 1 P6CBI   <NA>         2006-09-13 00:00:00  2006     9 1899-12-31 11:40:00
-#> 2 CMS3    <NA>         2020-06-17 00:00:00  2020     6 1899-12-31 11:22:54
-#> 3 CMS3    <NA>         2020-07-15 00:00:00  2020     7 1899-12-31 11:08:08
-#> 4 CMS3    <NA>         2020-07-30 00:00:00  2020     7 1899-12-31 11:39:33
-#> 5 CMS3    <NA>         2020-08-19 00:00:00  2020     8 1899-12-31 11:36:38
-#> 6 CMS3    <NA>         2020-09-17 00:00:00  2020     9 1899-12-31 11:52:14
-#> 7 CMS3    <NA>         2020-10-05 00:00:00  2020    10 1899-12-31 11:23:21
-#> # ... with 9 more variables: sample_depth <dbl>, secchi <chr>,
-#> #   water_depth <dbl>, temperature <dbl>, salinity <dbl>, do <dbl>,
-#> #   pctsat <dbl>, pH <dbl>, chl <dbl>
-```
+that were included in our spatial data. Neither matter for the current
+analysis. They will get filtered out when we select data to describe
+recent conditions.
 
 ## Address Secchi Censored Values
 
 Note we do NOT use maximum likelihood estimators of censored Secchi
 depth, as censored values are relatively rare, and do not affect median
-values.
+values, which are our focus here. The key goal is to include
+observations with Secchi Depth on the bottom, and include information on
+when the Secchi Depth may be biased.
 
 ``` r
 the_data <- the_data %>%
   mutate(secchi_2 = if_else(secchi == "BSV", water_depth, as.numeric(secchi)),
          bottom_flag = secchi == "BSV") %>%
   relocate(secchi_2, .after = secchi) %>%
-  relocate(bottom_flag, .after = secchi_2)
+  relocate(bottom_flag, .after = sample_depth)  # we want an ID column
 #> Warning: Problem with `mutate()` input `secchi_2`.
 #> i NAs introduced by coercion
 #> i Input `secchi_2` is `if_else(secchi == "BSV", water_depth, as.numeric(secchi))`.
 ```
 
+Warnings are caused because some entries in Secchi that could not be
+converted to numeric values. However, the warnings appear to have all
+been triggered by existing NAs, not problems importing numeric values.
+(Not shown.)
+
 ## Create Recent Data
 
-We filter to the last five FULL years of data, 2015 through 2019.
+In 2015, we presented marginal means and standard errors for sixteen
+different regions of the Bay. This time, we have fewer monitoring
+stations, and choose to present results for each monitoring location
+individually.
+
+We filter to the last five FULL years of data, 2015 through 2019, and
+add a transformed chlorophyll value, to facilitate plotting.
 
 ``` r
 recent_data <- the_data %>%
   filter(year > 2014 & year < 2020) %>%
   mutate(station = fct_reorder(station, temperature, median, na.rm = TRUE),
-         station_name = fct_reorder(station_name, temperature, median, na.rm = TRUE))
+         station_name = fct_reorder(station_name, 
+                                    temperature, median, na.rm = TRUE)) %>%
+  mutate(chl_log1p = log1p(chl))
+rm(the_data)
 ```
-
-# Recent Conditions
-
-In 2015, we presented marginal means and standard errors for sixteen
-different regions of the Bay. This time, we have fewer monitoring
-stations, and can present results for each monitoring location
-individually.
-
-It is convenient to run models to generate predictions and standard
-errors. For simple models, this is not strictly necessary, as one can
-use various `ggplot` summary functions with `stat_summary()` or
-`geom_pointrange()` to do much the same thing. The logic here can be
-generalized to more complex models and various marginal (adjusted)
-means.
 
 ## Create Nested Tibble
 
@@ -234,182 +205,374 @@ the data so that we can analyze along parameters. We add a list of
 labels and measurement units to simplify later labeling of plots.
 
 ``` r
-units <- tibble(parameter = c('secchi_2', 'temperature', 
+units <- tibble(parm = c('secchi_2', 'temperature', 
                               'salinity', 'do',
                               'pctsat', 'pH', 
-                              'chl'),
+                              'chl', 'chl_log1p'),
                 label = c("Secchi Depth", "Temperature",
                          "Salinity", "Dissolved Oxygen",
                          "Percent Saturation", "pH",
-                         "Chlorophyll A"),
+                         "Chlorophyll A", "Chlorophyll A"),
                 units = c('m', paste0("\U00B0", "C"),
                           'PSU', 'mg/l',
                           '', '',
-                          'mg/l'))
-
-
-nested_data <- recent_data %>%
-  select(-dt, -year, -time, -sample_depth, 
-         -secchi, - bottom_flag) %>%
-  relocate(water_depth, .after = month) %>%
-  pivot_longer(c(secchi_2:chl), names_to = 'parameter', values_to = 'value') %>%
-  filter(! is.na(value)) %>%
-  group_by(parameter) %>%
-  nest() %>%
-  left_join(units, by = 'parameter')
+                          'mg/l', 'mg/l'))
 ```
 
-# Standardize Plotting with Functions
+## Reorganize and Select Data
 
-We generate functions for consistent plot layout, to simplify managing a
-large potential collection of plots.
-
-Our functions are not completely encapsulated, as they assumes existence
-of `station`, `station_name`, and `value` fields in the source
-dataframe.
-
-## Jitter Plot
-
-This function shows raw data plus median and interquartile range. It is
-easy to alter this to show means and 95% bootstrap confidence intervals,
-using the `mean_cl_boot()` function.
-
-Since this function relies on the data (not predictions), we need to
-force it to plot nothing for any station for which data is missing. We
-do that by using `left_join()` to add complete lists of all possible
-`station` and `station_name` values.
+This is perhaps counter intuitive, because we “unnest” the nested data
+here. An alternative would be to start from `recent_data` and pivot to
+long form, but this ensures we are looking at the exact same data used
+in our other plots.
 
 ``` r
-jitter_plot <- function(.data, .label, .units = '', .min = NA, .max = NA) {
-  
-  # Units and Labels
-  yaxislabs = paste0(.label, if_else((! is.na(.units) & ! nchar(.units) == 0),
-                                       paste0(' (', .units, ')'), ''))
-  # Data preparation
-  dat <- .data 
-  # the station data still holds all possible levels.
-  # Levels ordered by mean temp, as created above.
-  all_stations <-  tibble(station = factor(levels(dat$station),
-                                           levels = levels(dat$station)),
-                          station_name = factor(levels(dat$station_name),
-                                                levels = levels(dat$station_name)))
-  dat <- dat %>%
-    select(-station_name)  # added back in in a moment; avoids confusion
-  
-  # Start with the list of stations, and join the data to that. 
-  # Than ensures we get a row with NAs for stations where we have no data.
-  # That ensures we get a blank slot in the graphic.
-  dat <- all_stations %>%
-    left_join(dat, by = 'station')
+data_long <- recent_data %>%
+  select(-dt, -year, -time, -sample_depth, -secchi) %>%
+  relocate(water_depth, .after = month) %>%
+  pivot_longer(c(secchi_2:chl_log1p), 
+               names_to = 'parm', 
+               values_to = 'value') %>%
+  mutate(bottom_flag = if_else(parm=='secchi_2', bottom_flag, FALSE)) %>%
+  filter(! is.na(value)) %>%
+  filter(parm %in% c('temperature', 'salinity', 'do', 
+                          'pH', 'secchi_2', 'chl_log1p')) %>%
+  mutate(parm = factor(parm,
+                            levels = c('temperature', 'salinity', 'do', 
+                                       'pH', 'secchi_2', 'chl_log1p')))
+```
 
-  # The lot
-  p <- ggplot(dat, aes(station_name, value)) +
-    geom_jitter(width = 0.3, height = 0, color = cbep_colors()[1], alpha = 0.5) +
+# Part 2: Faceted Graphics
+
+It would be nice to wrap those graphics up in a faceted format,
+principally to simplify axis labels.
+
+## Define Labels and Units
+
+We need a single data frame containing all the data, and a convenient
+way to label things correctly.
+
+## New Facet Labels
+
+``` r
+labs <- paste0(units$label, 
+                           if_else((! is.na(units$units) & 
+                                      ! nchar(units$units) == 0),
+                                       paste0(' (', units$units, ')'), ''))
+names(labs) <- units$parm
+```
+
+## Draft Jitter Plot
+
+``` r
+ p <- ggplot(data_long, aes(x = station_name, y = value)) +
+    geom_jitter(aes(color = bottom_flag), width = 0.3, height = 0, alpha = 0.5) +
     stat_summary(fun.data = function(.x) median_hilow(.x, conf.int = .5),
                  fill = cbep_colors()[2], color = "gray15",
                  size = .4, shape = 22) +
     xlab('') +
-    ylab(yaxislabs) +
+    ylab('') +
+  
+    scale_color_manual(values = cbep_colors(), 
+                       name = '', breaks = 'TRUE', label = 'Secchi On Bottom') +
+  
     theme_cbep(base_size = 12) +
     theme(axis.text.x = element_text(angle = 90,
                                      size = 8,
                                      hjust = 1,
-                                     vjust = 0.25),
-          axis.ticks.length.x = unit(0, 'cm'))
-  
-  if(! is.na(.min) | ! is.na(.max)) {
-    p <- p + scale_y_continuous(limits = c(.min, .max))
+                                     vjust = 0),
+          axis.ticks.length.x = unit(0, 'cm')) +
+  theme(legend.position = 'bottom') +
+  facet_wrap(~parm, nrow = 3,
+               scale = 'free_y',
+               labeller = labeller(parm = labs))
+p
+```
+
+<img src="Surface_Graphics_files/figure-gfm/draft_facet_jitter-1.png" style="display: block; margin: auto;" />
+
+That is very close, but the Y axis for the Chlorophyll values are
+misleading, since they are on a transformed scale.
+
+## Fixing the Chlorophyll Y Axis
+
+A little Googling suggests there is no easy way to adjust the Y axis
+limits independently in a facet display. For example, see
+[here:](https://stackoverflow.com/questions/11585954/varying-axis-labels-formatter-per-facet-in-ggplot-r)
+for a partial explanation and a work around.
+
+However, it **is** possible to define axis breaks and labels using a
+function.  
+That allows us to create a function that will create appropriate scales
+if we can construct a function that provides different values depending
+on which sub-plot we are in. The challenge here is that “facet” does not
+“know” which subplot we are in.
+
+We need to figure out which plot we are in based on the data passed to
+the breaks and label functions. We can do that if the plot or plots we
+want to alter have distinctive y axis limits, as they do here.
+
+The help file for `scale_y_continuous()` provides the option of setting
+the \`breaks parameter to:
+
+> A function that takes the limits as input and returns breaks as output
+> (e.g., a function returned by scales::extended\_breaks())
+
+Since we do not set the axis limits manually, we don’t know what the
+axis limits are. Luckily, in our use case, we \*DO**do** know that the
+upper axis limit for the (transformed) chlorophyll data is lower than
+any of the others. Eyeballing the draft graphic, it looks like the upper
+limit is around 5, while the next lowest maximum figure is well over 5.
+
+A similar problem (and solution) faces setting the labels for the
+breaks. but here, since we will have **set** the breaks, we can look to
+see if we have our specific breaks, and if so, set the labels
+appropriately. It’s slightly trickier than that, but that is the basic
+concept.
+
+#### See also
+
+`scales::breaks_extended()` `scales::breaks_log()`
+
+#### What Tick Labels Do We Want?
+
+The inverse of the `y = log(chl + 1)` transform is z = exp(x)-1. We have
+two choices for how to handle the labels. We can stick with evenly
+spaced divisions, and provide “correct” labels, or we an identify
+“clean” labels, and place our tick marks at those values.
+
+##### “Clean” Tick Values
+
+``` r
+a <- c(0, 2.5, 10 , 25 ,100)
+log(a +1)
+#> [1] 0.000000 1.252763 2.397895 3.258097 4.615121
+```
+
+#### Create Functions
+
+``` r
+prefered_breaks =  c(0, 1, 5, 10, 50)
+
+my_breaks_fxn <- function(lims) {
+  #browser()
+  if(max(lims) < 5.1) {
+    # Then we're looking at our transformed Chl data
+  a <- prefered_breaks
+    return(log(a +1))
   }
-  return(p)
+  else {
+    return(labeling::extended(lims[[1]], lims[[2]], 5))
+  }
+}
+
+# We are cheating a bit here by plotting transformed data, but providing 
+# labels that are back transformed.  That work is conducted by the 
+# labeling function.
+my_label_fxn <- function(brks) {
+  #browser()
+  # frequently, brks is passed with NA in place of one or more 
+  # of the candidate brks, even after I pass a vector of breaks.
+  # In particular, "pretty" breaks outside the range of the data
+  # are dropped and replaced with NA.
+  a <- prefered_breaks
+  b <- round(log(a+1), 3)
+  real_breaks = round(brks[! is.na(brks)], 3)
+  if (all(real_breaks %in% b)) {
+    # then we have our transformed Chl data
+    return(a)
+  }
+  else {
+    return(brks)
+  }
 }
 ```
 
-``` r
-tmp <- nested_data %>%
-  filter(parameter =='chl')
-         
-dat <- tmp$data[[1]]
+## Revised Jitter Plot
 
-p <- jitter_plot(dat, tmp$label, tmp$units, .max = 20)
-print(p)
-#> Warning: Removed 3 rows containing non-finite values (stat_summary).
-#> Warning: Removed 3 rows containing missing values (geom_point).
+``` r
+p_jit <- ggplot(data_long, aes(x = station_name, y = value)) +
+  geom_jitter(aes(color = bottom_flag), width = 0.3, height = 0, 
+              alpha = 0.15) +
+  stat_summary(fun.data = function(.x) median_hilow(.x, conf.int = .5),
+               fill = cbep_colors()[3], color = "black",
+               size = .4, shape = 22) +
+  xlab('') +
+  ylab('') +
+  
+  scale_color_manual(values = cbep_colors()[c(1,4)], 
+                     name = '', breaks = 'TRUE', label = 'Secchi On Bottom') +
+  scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
+  
+  theme_cbep(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 90,
+                                   size = 8,
+                                   hjust = 1,
+                                   vjust = 0),
+        axis.ticks.length.x = unit(0, 'cm')) +
+  theme(legend.position = 'bottom') +
+  
+  guides(color = guide_legend(override.aes = list(size = 3, alpha = 0.5) ) )
 ```
 
-<img src="Surface_Graphics_files/figure-gfm/test_jitter_plot-1.png" style="display: block; margin: auto;" />
+``` r
+p_jit +
+  facet_wrap(~parm, nrow = 3,
+             scale = 'free_y',
+             labeller = labeller(parm = labs))
+```
+
+<img src="Surface_Graphics_files/figure-gfm/jitter_wide, -1.png" style="display: block; margin: auto;" />
+
+``` r
+
+ ggsave('figures/surface_6_jitter_wide.pdf', device = cairo_pdf, 
+        width = 7, height = 7)
+```
+
+``` r
+p_jit +
+  facet_wrap(~parm, nrow = 6,
+             scale = 'free_y',
+             labeller = labeller(parm = labs))
+```
+
+<img src="Surface_Graphics_files/figure-gfm/jitter_long, -1.png" style="display: block; margin: auto;" />
+
+``` r
+
+ ggsave('figures/surface_6_jitter_long.pdf', device = cairo_pdf, 
+        width = 3.5, height = 9.5)
+```
 
 ## Violin Chart
 
-This plot also shows medians and the interquartile range. It does not
-use the models and predictions.
+``` r
+p_vio <- ggplot(data_long, aes(station_name, value)) +
+  geom_violin(width = 2, scale = "count", fill = cbep_colors()[6]) +
+  stat_summary(fun.data = function(.x) median_hilow(.x, conf.int = .5),
+               fill = cbep_colors()[2], color = "gray15",
+               size = .4, shape = 22) +
+  scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
+  xlab('') +
+  ylab('') +
+  theme_cbep(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 90,
+                                   size = 8,
+                                   hjust = 1,
+                                   vjust = 0.25),
+        axis.ticks.length.x = unit(0, 'cm')) 
+```
 
 ``` r
-violin_plot <- function(.data, .label, .units, .min = NA, .max = NA) {
-  
-  # Units and Labels
-  yaxislabs = paste0(.label, if_else((! is.na(.units) & ! nchar(.units) == 0),
-                                       paste0(' (', .units, ')'), ''))
-  
- # Data preparation
-  dat <- .data 
-  # the station data still holds all possible levels.
-  # Levels ordered by mean temp, as created above.
-  all_stations <-  tibble(station = factor(levels(dat$station),
-                                           levels = levels(dat$station)),
-                          station_name = factor(levels(dat$station_name),
-                                                levels = levels(dat$station_name)))
-  dat <- dat %>%
-    select(-station_name)
-  
-  dat <- all_stations %>%
-    left_join(dat, by = 'station')
+p_vio +
+  facet_wrap(~parm, nrow = 3,
+               scale = 'free_y',
+               labeller = labeller(parm = labs))
+#> Warning: position_dodge requires non-overlapping x intervals
 
-  p <- ggplot(dat, aes(station_name, value)) +
-    geom_violin(width = 2, scale = "count", fill = cbep_colors()[6]) +
-    stat_summary(fun.data = function(.x) median_hilow(.x, conf.int = .5),
-                 fill = cbep_colors()[2], color = "gray15",
-                 size = .4, shape = 22) +
+#> Warning: position_dodge requires non-overlapping x intervals
+
+#> Warning: position_dodge requires non-overlapping x intervals
+
+#> Warning: position_dodge requires non-overlapping x intervals
+
+#> Warning: position_dodge requires non-overlapping x intervals
+
+#> Warning: position_dodge requires non-overlapping x intervals
+```
+
+<img src="Surface_Graphics_files/figure-gfm/violin_wide-1.png" style="display: block; margin: auto;" />
+
+``` r
+
+ggsave('figures/surface_6_violin.pdf', device = cairo_pdf,
+       width = 7, height = 7)
+#> Warning: position_dodge requires non-overlapping x intervals
+
+#> Warning: position_dodge requires non-overlapping x intervals
+
+#> Warning: position_dodge requires non-overlapping x intervals
+
+#> Warning: position_dodge requires non-overlapping x intervals
+
+#> Warning: position_dodge requires non-overlapping x intervals
+
+#> Warning: position_dodge requires non-overlapping x intervals
+```
+
+## Bar Chart
+
+Here the situation is a bit easier, as we do not have to plot the
+extreme outliers, and only show medians and the interquartile range.
+
+``` r
+p_bar <- ggplot(data_long, aes(x = station_name, y = value)) +
+    stat_summary(fun = median, na.rm = TRUE,
+                 geom = 'col', width = 1,
+                 fill = cbep_colors()[1],
+                 color = cbep_colors()[3]) +
+    stat_summary(fun.data = function(.x) median_hilow(.x, conf.int= 0.5), 
+                 geom = 'linerange', 
+                 color = cbep_colors()[2]) + 
+  
+    scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
     xlab('') +
-    ylab(yaxislabs) +
+    ylab('') +
+   
     theme_cbep(base_size = 12) +
     theme(axis.text.x = element_text(angle = 90,
                                      size = 8,
                                      hjust = 1,
                                      vjust = 0.25),
-          axis.ticks.length.x = unit(0, 'cm'))
-  
-  if(! is.na(.min) | ! is.na(.max)) {
-    p <- p + scale_y_continuous(limits = c(.min, .max))
-  }
-  return(p)
-}
+          axis.ticks.length.x = unit(0, 'cm')) + facet_wrap(~parm, 
+               scale = 'free_y',
+               labeller = labeller(parm = labs))
 ```
 
 ``` r
-tmp <- nested_data %>%
-  filter(parameter =='chl')
-dat <- tmp$data[[1]]
-
-p <- violin_plot(dat, tmp$label, tmp$units, .min = 0, .max = 20)
-print(p)
-#> Warning: Removed 4 rows containing non-finite values (stat_ydensity).
-#> Warning: Removed 4 rows containing non-finite values (stat_summary).
-#> Warning: position_dodge requires non-overlapping x intervals
+p_bar +
+facet_wrap(~parm, nrow = 3,
+               scale = 'free_y',
+               labeller = labeller(parm = labs))
 ```
 
-<img src="Surface_Graphics_files/figure-gfm/test_violin-1.png" style="display: block; margin: auto;" />
-That is visually more confusing than the jitter plot. It is better when
-the graphic is widened somewhat, allowing the violins to spread out
-more.
+<img src="Surface_Graphics_files/figure-gfm/bar_wide-1.png" style="display: block; margin: auto;" />
 
-## Bar Plot
+``` r
+ggsave('figures/surface_6_bar.pdf', device = cairo_pdf, width = 7, height = 7)
+```
 
-This bar plot is also based on the underlying data
+The revised Bar chart is ALMOST right, but it suffers because the bar
+chart automatically includes the value zero at the base of each scale.
+There is no good way to convenient override that behavior in facet
+graphics.  
+A bar chart that includes the value zero works for all the metrics
+except pH, where a pH of zero makes little sense, and the small changes
+between pH of 7.8 and 8. vanish if zero is included on the scale.
+
+(The default graphic logic here is good: the area or height of the bar
+is misleading if the value is not a true ratio value, where the value
+zero has meaning. It suggests we should consider alternate graphic
+forms.
+
+# Alternates to the Facet Bar Chart
+
+The primary alternative is to construct a grid layout. It’s not clear
+how to do that and not repeat the Station names for every plot….
+
+s a poor man’s alternative, we generate final versions of all six bar
+charts, with appropriate limits and scales.
+
+## Revised Bar Chart Function
+
+The primary change here is addition of the breaks and labeling functions
+and movement of the labels to the chart title from the y axis.
 
 ``` r
 bar_plot <- function(.data, .label, .units, .min = NA, .max = NA) {
   # Units and Labels
-  yaxislabs = paste0(.label, if_else((! is.na(.units) & ! nchar(.units) == 0),
+  labs = paste0(.label, if_else((! is.na(.units) & ! nchar(.units) == 0),
                                        paste0(' (', .units, ')'), ''))
   
  # Data preparation
@@ -429,20 +592,24 @@ bar_plot <- function(.data, .label, .units, .min = NA, .max = NA) {
   
   p <- ggplot(dat, aes(x = station_name, y = value)) +
     stat_summary(fun = median, na.rm = TRUE,
-                 geom = 'bar',
-                 fill = cbep_colors()[1]) +
+                 geom = 'col', width = 1,
+                 fill = cbep_colors()[1],
+                 color = cbep_colors()[3]) +
     stat_summary(fun.data = function(.x) median_hilow(.x, conf.int= 0.5), 
                  geom = 'linerange', 
-                 color = cbep_colors()[2]) + 
+                 color = cbep_colors()[4]) +  
+    
+    scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
+    
     xlab('') +
-    ylab(yaxislabs) +
+    ylab('') +
+    ggtitle(labs) +
     theme_cbep(base_size = 12) +
     theme(axis.text.x = element_text(angle = 90,
                                      size = 8,
                                      hjust = 1,
                                      vjust = 0.25),
           axis.ticks.length.x = unit(0, 'cm'))
-  
   
   if(! is.na(.min) | ! is.na(.max)) {
       p <- p + coord_cartesian(ylim = c(.min, .max))
@@ -451,452 +618,75 @@ bar_plot <- function(.data, .label, .units, .min = NA, .max = NA) {
 }
 ```
 
-``` r
-p <- bar_plot(dat, tmp$label, tmp$units)
-print(p)
-#> Warning: Removed 1 rows containing non-finite values (stat_summary).
-```
-
-<img src="Surface_Graphics_files/figure-gfm/test_barplot-1.png" style="display: block; margin: auto;" />
-
-# All Draft Plots
-
-## Automating Labels and Limits
+## Automating Limits
 
 ``` r
-my_lims <- tribble( ~parameter, ~minim, ~maxim,
+my_lims <- tribble( ~parm, ~minim, ~maxim,
                    "secchi_2",     NA, NA,
-                   "temperature",   5, NA,
+                   "temperature",   10, NA,
                    "salinity",      10, NA,
                    "do" ,           5, NA,
                    "pctsat",         50, NA,  
-                   "pH",            7, NA,       
-                   "chl",           0,15)
+                   "pH",            6.5, NA,       
+                   "chl",           0,NA,
+                   "chl_log1p",     0, NA)
 ```
-
-## All Jitter Plots
-
-``` r
-for (p in nested_data$parameter) {
-  sel <- nested_data %>%
-    filter(parameter == p)
-  dat <- sel$data[[1]]
-  label <- sel$label[[1]]
-  units <- sel$units[[1]]
-
-  the_min <- my_lims %>%
-    filter(parameter == p) %>%
-    pull(minim)
-  the_max <- my_lims %>%
-    filter(parameter == p) %>%
-    pull(maxim)
-  
- print(jitter_plot(dat, label, units, the_min, the_max))
-}
-```
-
-<img src="Surface_Graphics_files/figure-gfm/all_jitters-1.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/all_jitters-2.png" style="display: block; margin: auto;" />
-
-    #> Warning: Removed 70 rows containing non-finite values (stat_summary).
-    #> Warning: Removed 70 rows containing missing values (geom_point).
-
-<img src="Surface_Graphics_files/figure-gfm/all_jitters-3.png" style="display: block; margin: auto;" />
-
-    #> Warning: Removed 14 rows containing non-finite values (stat_summary).
-    #> Warning: Removed 14 rows containing missing values (geom_point).
-
-<img src="Surface_Graphics_files/figure-gfm/all_jitters-4.png" style="display: block; margin: auto;" />
-
-    #> Warning: Removed 3 rows containing non-finite values (stat_summary).
-    #> Warning: Removed 3 rows containing missing values (geom_point).
-
-<img src="Surface_Graphics_files/figure-gfm/all_jitters-5.png" style="display: block; margin: auto;" />
-
-    #> Warning: Removed 22 rows containing non-finite values (stat_summary).
-    #> Warning: Removed 22 rows containing missing values (geom_point).
-
-<img src="Surface_Graphics_files/figure-gfm/all_jitters-6.png" style="display: block; margin: auto;" />
-
-    #> Warning: Removed 6 rows containing non-finite values (stat_summary).
-    #> Warning: Removed 6 rows containing missing values (geom_point).
-
-<img src="Surface_Graphics_files/figure-gfm/all_jitters-7.png" style="display: block; margin: auto;" />
-
-## All Violin Plots
-
-``` r
-for (p in nested_data$parameter) {
-  sel <- nested_data %>%
-    filter(parameter == p)
-  dat <- sel$data[[1]]
-  label = sel$label[[1]]
-  units = sel$units[[1]]
-
-  the_min <- my_lims %>%
-    filter(parameter == p) %>%
-    pull(minim)
-  the_max <- my_lims %>%
-    filter(parameter == p) %>%
-    pull(maxim)
-  
- print(violin_plot(dat, label, units, the_min, the_max))
-}
-#> Warning: position_dodge requires non-overlapping x intervals
-```
-
-<img src="Surface_Graphics_files/figure-gfm/all_violins-1.png" style="display: block; margin: auto;" />
-
-    #> Warning: position_dodge requires non-overlapping x intervals
-
-<img src="Surface_Graphics_files/figure-gfm/all_violins-2.png" style="display: block; margin: auto;" />
-
-    #> Warning: Removed 70 rows containing non-finite values (stat_ydensity).
-    #> Warning: Removed 70 rows containing non-finite values (stat_summary).
-    #> Warning: position_dodge requires non-overlapping x intervals
-
-<img src="Surface_Graphics_files/figure-gfm/all_violins-3.png" style="display: block; margin: auto;" />
-
-    #> Warning: Removed 14 rows containing non-finite values (stat_ydensity).
-    #> Warning: Removed 14 rows containing non-finite values (stat_summary).
-    #> Warning: position_dodge requires non-overlapping x intervals
-
-<img src="Surface_Graphics_files/figure-gfm/all_violins-4.png" style="display: block; margin: auto;" />
-
-    #> Warning: Removed 3 rows containing non-finite values (stat_ydensity).
-    #> Warning: Removed 3 rows containing non-finite values (stat_summary).
-    #> Warning: position_dodge requires non-overlapping x intervals
-
-<img src="Surface_Graphics_files/figure-gfm/all_violins-5.png" style="display: block; margin: auto;" />
-
-    #> Warning: Removed 22 rows containing non-finite values (stat_ydensity).
-    #> Warning: Removed 22 rows containing non-finite values (stat_summary).
-    #> Warning: position_dodge requires non-overlapping x intervals
-
-<img src="Surface_Graphics_files/figure-gfm/all_violins-6.png" style="display: block; margin: auto;" />
-
-    #> Warning: Removed 6 rows containing non-finite values (stat_ydensity).
-    #> Warning: Removed 6 rows containing non-finite values (stat_summary).
-    #> Warning: position_dodge requires non-overlapping x intervals
-
-<img src="Surface_Graphics_files/figure-gfm/all_violins-7.png" style="display: block; margin: auto;" />
 
 ## All Bar Plots
 
 ``` r
-for (p in nested_data$parameter) {
-  sel <- nested_data %>%
-    filter(parameter == p)
-  dat <- sel$data[[1]]
-  label = sel$label[[1]]
-  units = sel$units[[1]]
+for (p in c('temperature', 'salinity', 'do', 
+            'pH', 'secchi_2', 'chl_log1p')) {
+  dat <- data_long%>%
+    filter(parm == p)
+
+  label = units$label[units$parm == p]
+  unit = units$units[units$parm == p]
 
   the_min <- my_lims %>%
-    filter(parameter == p) %>%
+    filter(parm == p) %>%
     pull(minim)
   the_max <- my_lims %>%
-    filter(parameter == p) %>%
+    filter(parm == p) %>%
     pull(maxim)
   
- print(bar_plot(dat, label, units, the_min, the_max))
+ print(bar_plot(dat, label, unit, the_min, the_max))
+ fn <- paste0('bar_chart_', p, '.pdf')
+ ggsave(file.path('figures',fn), device = cairo_pdf, width = 3.5, height = 3.5)
 }
 ```
 
-<img src="Surface_Graphics_files/figure-gfm/all_bars-1.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/all_bars-2.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/all_bars-3.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/all_bars-4.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/all_bars-5.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/all_bars-6.png" style="display: block; margin: auto;" />
+<img src="Surface_Graphics_files/figure-gfm/all_bars_2-1.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/all_bars_2-2.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/all_bars_2-3.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/all_bars_2-4.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/all_bars_2-5.png" style="display: block; margin: auto;" />
 
     #> Warning: Removed 1 rows containing non-finite values (stat_summary).
 
-<img src="Surface_Graphics_files/figure-gfm/all_bars-7.png" style="display: block; margin: auto;" />
+    #> Warning: Removed 1 rows containing non-finite values (stat_summary).
 
-# Faceted Graphics
+<img src="Surface_Graphics_files/figure-gfm/all_bars_2-6.png" style="display: block; margin: auto;" />
+While those plots look similar, the width of the core plot is not
+identical, as plot size is adjusted to accommodate the width of the axis
+labels and titles. That means we can not just line up plots and have the
+bars line up vertically over the Station Names.
 
-It would be nice to wrap those graphics up in a faceted format,
-principally to simplify axis labels.
+Apparently the `egg`, `cowplot` and `patchwork` packages all have this
+capability.
 
-## Define Labels and Units
-
-We need a single data frame containing all the data, and a convenient
-way to label things correctly.
+# Temperature / DO Graph
 
 ``` r
-units <- tibble(parameter = c('secchi_2', 'temperature', 
-                              'salinity', 'do',
-                              'pctsat', 'pH', 
-                              'chl'),
-                label = c("Secchi Depth", "Temperature",
-                         "Salinity", "Dissolved Oxygen",
-                         "Percent Saturation", "pH",
-                         "Chlorophyll A"),
-                units = c('m', paste0("\U00B0", "C"),
-                          'PSU', 'mg/l',
-                          '', '',
-                          'mg/l'))
+p <- ggplot(recent_data, aes(temperature, do)) +
+  geom_point(color = cbep_colors()[5], alpha = 0.5) +
+  #geom_smooth(method = 'lm', formula = y~poly(x,3), se = FALSE) +
+  xlab(paste0("Temperature (", "\U00B0", "C)")) +
+  ylab('Dissolved Oxygen (mg/l)') +
+  theme_cbep(base_size = 12)
+p
+#> Warning: Removed 19 rows containing missing values (geom_point).
 ```
 
-## New Facet Labels
+<img src="Surface_Graphics_files/figure-gfm/temp_do_graph-1.png" style="display: block; margin: auto;" />
 
 ``` r
-labs <- paste0(units$label, 
-                           if_else((! is.na(units$units) & 
-                                      ! nchar(units$units) == 0),
-                                       paste0(' (', units$units, ')'), ''))
-names(labs) <- units$parameter
-```
-
-## Reorganize and Select Data
-
-``` r
-list_df <- nested_data$data
-names(list_df) <-  nested_data$parameter
-
-data_all <- bind_rows(list_df, .id = 'Parameter')
-
-data_sel <- data_all %>%
-  filter(Parameter %in% c('temperature', 'secchi_2', 'do', 
-                          'chl')) %>%
-  mutate(Parameter = factor(Parameter,
-                            levels = c('temperature', 'secchi_2', 'do', 
-                                       'chl')))
-```
-
-## Jitter Plot
-
-### Initial Draft
-
-``` r
- p <- ggplot(data_sel, aes(x = station_name, y = value)) +
-    geom_jitter(width = 0.3, height = 0, color = cbep_colors()[1], alpha = 0.5) +
-    stat_summary(fun.data = function(.x) median_hilow(.x, conf.int = .5),
-                 fill = cbep_colors()[2], color = "gray15",
-                 size = .4, shape = 22) +
-    xlab('') +
-    ylab('') +
-    theme_cbep(base_size = 12) +
-    theme(axis.text.x = element_text(angle = 90,
-                                     size = 8,
-                                     hjust = 1,
-                                     vjust = 0.25),
-          axis.ticks.length.x = unit(0, 'cm'))
-```
-
-``` r
-p + facet_wrap(~Parameter, 
-               scale = 'free_y',
-               labeller = labeller(Parameter = labs))
-```
-
-<img src="Surface_Graphics_files/figure-gfm/two_by_two_jitter-1.png" style="display: block; margin: auto;" />
-
-### Revised Draft
-
-A little Googling suggests there is no easy way to adjust the Y axis
-limits in a facet display.
-
-We have a couple of unpalatable options. Probably the best is to
-pre-calculate the median and interquartile range, then trim the data,
-and replot.
-
-#### Reorganize and Select Data - Again
-
-##### Limit data to selected parameters
-
-``` r
-reduced_df <- nested_data %>%
-  filter(parameter %in% c('temperature', 'secchi_2', 'do', 
-                          'chl'))
-```
-
-##### Caclulate Summaries
-
-We need to calculate our selected summaries of location and scale, here
-the median and interquartile ranges. We calculate them based on the full
-data, not based on the reduced data points we will actually plot.
-
-``` r
-summrys <- data_sel %>%
-group_by(Parameter, station) %>%
-summarize(station_name = first(station_name),
-          summry = median_hilow(value, conf.int = 0.5),
-          .groups = 'drop') %>%
-  mutate(y = summry$y,
-         ymin = summry$ymin,
-         ymax = summry$ymax) %>%
-  select (-summry)
-```
-
-We now delete all points with a chlorophyll value over 20.
-
-``` r
-data_sel_2 <- data_sel %>%
-  filter ( ! (Parameter == 'chl' & value > 20) )
-```
-
-#### Revised Plots
-
-``` r
-p <- ggplot(data_sel_2, aes(x = station_name, y = value)) +
-  geom_jitter(width = 0.3, height = 0, color = cbep_colors()[1], alpha = 0.5) +
- 
-  
-  geom_pointrange(mapping= aes(y = y, ymin = ymin, ymax = ymax),
-                  data = summrys,
-                  fill = cbep_colors()[2], color = "gray15",
-                  size = .4, shape = 22) +
-  
-  xlab('') +
-  ylab('') +
-  theme_cbep(base_size = 12) +
-  theme(axis.text.x = element_text(angle = 90,
-                                     size = 8,
-                                     hjust = 1,
-                                     vjust = 0.25),
-          axis.ticks.length.x = unit(0, 'cm'))
-```
-
-``` r
-p + facet_wrap(~Parameter, 
-               scale = 'free_y',
-               labeller = labeller(Parameter = labs))
-```
-
-<img src="Surface_Graphics_files/figure-gfm/revised_two_by_two_jitter-1.png" style="display: block; margin: auto;" />
-
-``` r
-ggsave('figures/surface_4_wide_jitter.pdf', device = cairo_pdf, width = 7, height = 5)
-```
-
-``` r
-p + facet_wrap(~Parameter, 
-               scale = 'free_y',
-               nrow = 4,
-               labeller = labeller(Parameter = labs))
-```
-
-<img src="Surface_Graphics_files/figure-gfm/revised_one_by_four_jitter-1.png" style="display: block; margin: auto;" />
-
-``` r
-ggsave('figures/surface_4_long_jitter.pdf', device = cairo_pdf, width = 3.5, height = 8)
-```
-
-## Violin Chart
-
-The inability to control the Y axis is again problematic, but we now
-have a viable solution.
-
-``` r
- p <- ggplot(data_sel_2, aes(station_name, value)) +
-    geom_violin(width = 2, scale = "count", fill = cbep_colors()[6]) +
-    geom_pointrange(mapping= aes(y = y, ymin = ymin, ymax = ymax),
-                  data = summrys,
-                  fill = cbep_colors()[2], color = "gray15",
-                  size = .4, shape = 22) +
-    xlab('') +
-    ylab('') +
-    theme_cbep(base_size = 12) +
-    theme(axis.text.x = element_text(angle = 90,
-                                     size = 8,
-                                     hjust = 1,
-                                     vjust = 0.25),
-          axis.ticks.length.x = unit(0, 'cm'))
-```
-
-``` r
-p + facet_wrap(~Parameter, 
-               scale = 'free_y',
-               labeller = labeller(Parameter = labs))
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-```
-
-<img src="Surface_Graphics_files/figure-gfm/two_by_two_violin-1.png" style="display: block; margin: auto;" />
-
-``` r
-ggsave('figures/surface_4_wide_violin.pdf', device = cairo_pdf, width = 7, height = 5)
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-```
-
-``` r
-p + facet_wrap(~Parameter, 
-               scale = 'free_y',
-               nrow = 4,
-               labeller = labeller(Parameter = labs))
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-```
-
-<img src="Surface_Graphics_files/figure-gfm/one_by_four_violin-1.png" style="display: block; margin: auto;" />
-
-``` r
-ggsave('figures/surface_4_long_violin.pdf', device = cairo_pdf, width = 3.5, height = 8)
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-```
-
-## Bar Chart
-
-Here the situation is a bit easier, as we do not have to plot the
-extreme outliers, and only show medians and the interquartile range.
-
-``` r
-p <- ggplot(data_sel, aes(x = station_name, y = value)) +
-    stat_summary(fun = median, na.rm = TRUE,
-                 geom = 'bar',
-                 fill = cbep_colors()[1]) +
-    stat_summary(fun.data = function(.x) median_hilow(.x, conf.int= 0.5), 
-                 geom = 'linerange', 
-                 color = cbep_colors()[2]) + 
-    xlab('') +
-    ylab('') +
-   
-    theme_cbep(base_size = 12) +
-    theme(axis.text.x = element_text(angle = 90,
-                                     size = 8,
-                                     hjust = 1,
-                                     vjust = 0.25),
-          axis.ticks.length.x = unit(0, 'cm'))
-```
-
-``` r
-p + facet_wrap(~Parameter, 
-               scale = 'free_y',
-               labeller = labeller(Parameter = labs))
-```
-
-<img src="Surface_Graphics_files/figure-gfm/two_by_two_bar-1.png" style="display: block; margin: auto;" />
-
-``` r
-ggsave('figures/surface_4_wide_bar.pdf', device = cairo_pdf, width = 7, height = 5)
-```
-
-``` r
-p + facet_wrap(~Parameter, 
-               scale = 'free_y',
-               nrow = 4,
-               labeller = labeller(Parameter = labs))
-```
-
-<img src="Surface_Graphics_files/figure-gfm/one_by_four_bar-1.png" style="display: block; margin: auto;" />
-
-``` r
-ggsave('figures/surface_4_long_bar.pdf', device = cairo_pdf, width = 3.5, height = 8)
+ggsave('figures/do_temp.pdf', device = cairo_pdf, width = 4, height = 3)
+#> Warning: Removed 19 rows containing missing values (geom_point).
 ```

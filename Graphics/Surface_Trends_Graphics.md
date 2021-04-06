@@ -1,49 +1,43 @@
-Analysis of Seasonal Water Quality Trends from Friends of Casco Bay Data
+Graphics Showing Seasonal Water Quality Trends from Friends of Casco Bay
+Data
 ================
 Curtis C. Bohlen, Casco Bay Estuary Partnership
 3/25/2021
 
 -   [Introduction](#introduction)
 -   [Load Libraries](#load-libraries)
--   [Load Data](#load-data)
+-   [Part 1: Load and Organize Data](#part-1-load-and-organize-data)
     -   [Establish Folder Reference](#establish-folder-reference)
     -   [Primary Data](#primary-data)
         -   [Remove 2020 only data](#remove-2020-only-data)
-        -   [Add Seasonal Factors](#add-seasonal-factors)
+        -   [Add Seasonal Factor](#add-seasonal-factor)
         -   [Address Secchi Censored
             Values](#address-secchi-censored-values)
         -   [Limit Chlorophyll to Three Long-Term
             Stations](#limit-chlorophyll-to-three-long-term-stations)
-        -   [Transform the Chlorophyll A
-            Data](#transform-the-chlorophyll-a-data)
--   [Create Trend Data](#create-trend-data)
--   [Construct Nested Tibble](#construct-nested-tibble)
--   [Part 1: Modeling](#part-1-modeling)
+        -   [Select Parameters](#select-parameters)
+    -   [Create Trend Data](#create-trend-data)
+    -   [Construct Nested Tibble](#construct-nested-tibble)
+-   [Part 2: Modeling](#part-2-modeling)
     -   [Models](#models)
         -   [ANOVAs](#anovas)
-    -   [Compare Slopes](#compare-slopes)
--   [Deriving Annotations from general
-    results.](#deriving-annotations-from-general-results.)
-    -   [Terminology:](#terminology)
-    -   [Notes](#notes)
-        -   [Marginal Means](#marginal-means)
--   [Graphics](#graphics)
-    -   [Primary Plots](#primary-plots)
-    -   [Fix Chlorophyll Models and
-        Graphic](#fix-chlorophyll-models-and-graphic)
--   [Add Annotations](#add-annotations)
-    -   [Define Annotations](#define-annotations)
-    -   [Annotation Placement](#annotation-placement)
-    -   [Demo: Add Annotations to Plots](#demo-add-annotations-to-plots)
--   [Symbols](#symbols)
-    -   [Possible Unicode Glyphs](#possible-unicode-glyphs)
-        -   [Hollow Shapes](#hollow-shapes)
-        -   [Solid Shapes](#solid-shapes)
-        -   [Heavy Arrows](#heavy-arrows)
-        -   [Alternate “No Change” Glyphs](#alternate-no-change-glyphs)
-    -   [Demo Glyphs](#demo-glyphs)
-    -   [Demo Add Glyphs to Plots](#demo-add-glyphs-to-plots)
--   [Add Both](#add-both)
+        -   [Compare Slopes](#compare-slopes)
+    -   [Deriving Annotations from general
+        results.](#deriving-annotations-from-general-results.)
+    -   [Marginal Means](#marginal-means)
+        -   [Limit Forecasts Chlorophyll](#limit-forecasts-chlorophyll)
+-   [Part 3: Graphics](#part-3-graphics)
+    -   [Facet Graphics](#facet-graphics)
+        -   [Data Set up](#data-set-up)
+        -   [New Facet Labels](#new-facet-labels)
+        -   [Draft Graphic](#draft-graphic)
+        -   [Fixing the Chlorophyll Y
+            Axis](#fixing-the-chlorophyll-y-axis)
+    -   [Assembling the Final Graphic](#assembling-the-final-graphic)
+        -   [Base Graphic](#base-graphic)
+        -   [Add Annotations](#add-annotations)
+        -   [Add Symbols](#add-symbols)
+        -   [Final Products](#final-products)
 
 <img
     src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
@@ -81,7 +75,7 @@ library(tidyverse)
 #> x dplyr::lag()    masks stats::lag()
 library(readxl)
 
-library(mgcv)     # For `gam()` and `gamm()` models
+library(mgcv)     # For `gam()` models, used here for hierarchical models
 #> Loading required package: nlme
 #> 
 #> Attaching package: 'nlme'
@@ -90,7 +84,7 @@ library(mgcv)     # For `gam()` and `gamm()` models
 #>     collapse
 #> This is mgcv 1.8-33. For overview type 'help("mgcv-package")'.
 library(emmeans)
-library(grid)     # for lower level plotting functions
+
 library(ggpmisc)  # Allows absolute positioning of annotations and text
 #> Warning: package 'ggpmisc' was built under R version 4.0.4
 #> 
@@ -104,7 +98,7 @@ load_cbep_fonts()
 theme_set(theme_cbep())
 ```
 
-# Load Data
+# Part 1: Load and Organize Data
 
 ## Establish Folder Reference
 
@@ -136,7 +130,7 @@ mynames <- c('station', 'dt', 'time', 'sample_depth',
 
 the_data <- read_excel(fpath, skip=2, col_names = mynames) %>%
   mutate(month = factor(month, levels = 1:12, labels = month.abb)) %>%
-  relocate(month, .after = dt)
+  relocate(month, year, .after = dt)
 
 rm(mynames)
 ```
@@ -148,18 +142,15 @@ the_data <- the_data %>%
 select(-c(fdom:winddir))
 ```
 
-### Add Seasonal Factors
+### Add Seasonal Factor
 
 ``` r
 the_data <- the_data %>%
-  mutate(season_2 = fct_collapse(month, 
-                                 Early = c('Apr', 'May', 'Jun'),
-                                 Late =  c('Jul', 'Aug', 'Sep', 'Oct')),
-         season_3 =  fct_collapse(month, 
+  mutate(season_3 =  fct_collapse(month, 
                                  Spring = c('Apr', 'May'), 
                                  Summer = c('Jun','Jul', 'Aug'),
                                  Fall   =  c('Sep', 'Oct'))) %>%
-  relocate(season_2, season_3, .after = month)
+  relocate(season_3, .after = month)
 ```
 
 ### Address Secchi Censored Values
@@ -169,7 +160,7 @@ the_data <- the_data %>%
   mutate(secchi_2 = if_else(secchi == "BSV", water_depth, as.numeric(secchi)),
          bottom_flag = secchi == "BSV") %>%
   relocate(secchi_2, .after = secchi) %>%
-  relocate(bottom_flag, .after = secchi_2)
+  relocate(bottom_flag, .after = year)
 #> Warning: Problem with `mutate()` input `secchi_2`.
 #> i NAs introduced by coercion
 #> i Input `secchi_2` is `if_else(secchi == "BSV", water_depth, as.numeric(secchi))`.
@@ -180,28 +171,21 @@ the_data <- the_data %>%
 ``` r
 the_data <- the_data %>%
   mutate(chl = if_else(station %in% c('P5BSD', 'P6FGG', 'P7CBI'),
-                                   chl, NA_real_))
+                                   chl, NA_real_)) %>%
+  mutate(chl_log1p = log1p(chl))
 ```
 
-### Transform the Chlorophyll A Data
+### Select Parameters
 
-We create log(X + 1) transformed version of the Chlorophyll data. That
-allows us to conduct analyses of transformed and untransformed data in
-parallel.
-
-The choice of transform for chlorophyll has significant import, as it
-determines whether chlorophyll is considered to have a significant
-long-term trend or not. This confusing situation is driven by fifteen
-nominal “zero” values in the data from early in the data record. See
-`Surface_Analysis_Chlorophyll_Trends.Rmd` for details.
+We will plot six parameters, omitting percent saturation, and plotting
+chlorophyll on a transformed y axis.
 
 ``` r
 the_data <- the_data %>%
-  mutate(log1_chl = log1p(chl)) %>%
-  relocate(log1_chl, .after = chl)
+  select(-chl, -pctsat)
 ```
 
-# Create Trend Data
+## Create Trend Data
 
 First, we create a tibble containing information on years in which each
 station was sampled.
@@ -229,8 +213,9 @@ selected_stations <- years_data %>%
 trend_data <- the_data %>%
   filter(station %in% selected_stations) %>%
   mutate(station = fct_drop(station)) %>%
-  mutate(station = fct_reorder(station, temperature, mean, na.rm = TRUE))
+  mutate(station = fct_reorder(station, temperature, mean, na.rm = TRUE)) 
 rm(selected_stations, years_data)
+rm(the_data)
 ```
 
 ``` r
@@ -242,59 +227,39 @@ We are reduced to only 17 stations with long-term records for trend
 analysis. We noted above that we have limited chlorophyll data before
 the last couple of years. We address that momentarily
 
-# Construct Nested Tibble
+## Construct Nested Tibble
 
 ``` r
-units <- tibble(parameter = c('secchi_2', 'temperature', 
-                              'salinity', 'do',
-                              'pctsat', 'pH', 
-                              'chl', 'log1_chl'),
-                label = c("Secchi Depth", "Temperature",
-                         "Salinity", "Dissolved Oxygen",
-                         "Percent Saturation", "pH",
-                         "Chlorophyll A", "Log(Chlorophyll A plus 1)"),
-                units = c('m', paste0("\U00B0", "C"),
-                          'PSU', 'mg/l',
-                          '', '',
-                          'mg/l', 'mg/l'))
+units <- tibble(parm = c('temperature', 'salinity', 'do', 
+                          'pH', 'secchi_2', 'chl_log1p'),
+                label = c("Temperature","Salinity", "Dissolved Oxygen",
+                         "pH", "Secchi Depth", "Chlorophyll A"),
+                units = c(paste0("\U00B0", "C"),'PSU', 'mg/l','','m',
+                          'mg/l'))
 
 nested_data <- trend_data %>%
-  select(-time, -sample_depth, 
-         -secchi, -water_depth) %>%
-  mutate(year_f = factor(year)) %>%
-  relocate(bottom_flag, .after = season_3) %>%
-  
-  pivot_longer(c(secchi_2:log1_chl), names_to = 'parameter', 
+  select(-dt, -time, -sample_depth, 
+         -secchi) %>%
+  relocate(water_depth, .after = month) %>%
+  pivot_longer(c(secchi_2:chl_log1p), 
+               names_to = 'parm', 
                values_to = 'value') %>%
+  mutate(bottom_flag = if_else(parm=='secchi_2', bottom_flag, FALSE)) %>%
   filter(! is.na(value)) %>%
-  
-  # This allows us to ensure the order of the rows in the nested tibble
-  mutate(parameter = factor(parameter,
-                            levels = c('secchi_2', 'temperature',
-                                       'salinity', 'do',
-                                       'pctsat', 'pH',
-                                       'chl', 'log1_chl'))) %>%
 
-  # change all `bottom_flag` values to FALSE except for secchi_2 df 
-  # this allows selective coloring in later graphics
-  mutate(bottom_flag = if_else(parameter != 'secchi_2', 
-                               NA, 
-                               bottom_flag)) %>%
-  group_by(parameter) %>%
+  group_by(parm) %>%
   nest() %>%
-  arrange(parameter) %>%
-  left_join(units, by = 'parameter')
+  left_join(units, by = 'parm') %>%
+   mutate(parm = factor(parm,
+                       levels = c('temperature', 'salinity', 'do', 
+                                  'pH', 'secchi_2', 'chl_log1p')))
 ```
 
-# Part 1: Modeling
+# Part 2: Modeling
 
 We treat stations as random exemplars of possible stations, and thus
 rely on hierarchical models. We use a GAM model with a random factor
 smoothing term. We restrict ourselves to linear trends by year.
-
-The month model focus on an overall linear trend, but the deduced
-overall trend is problematic because of different trends by month or
-season. The seasonal models unpack those trends.
 
 The seasonal models were motivated by two dimensional tensor smooth GAM
 models developed in “Surface\_Analysis\_Trends.Rmd”. We look at other
@@ -304,180 +269,18 @@ interaction models in “Surface\_Seasonal\_Trends.Rmd”
 
 ``` r
 nested_data <- nested_data %>%
-  mutate(lmers = map(data, function(df) gam(value ~ year + month + 
-                                              s(station, bs = 're'), 
-                                            data = df))) %>%
-  mutate(lmer_3_seas_2 = map(data, function(df) gam(value ~ year * season_3 + 
+  mutate(lmer_s = map(data, function(df) gam(value ~ year * season_3 + 
                                               s(station, bs = 're'), 
                                             data = df)))
-  names(nested_data$lmers) <- nested_data$parameter
-  names(nested_data$lmer_3_seas_2) <- nested_data$parameter
-```
-
-\#\#\#Refit the Chlorophyll Model We refit the chlorophyll model with an
-included transformation.
-
-``` r
-dat <- nested_data %>%
-  filter(parameter == 'chl') %>%
-  pull(data)               # Returns a list
-dat <- dat[[1]]  # Extract the first item....  df is now a data frame
-
-#`emmeans` recognizes the log(value + 1) transform, but it does not recognize
-# equivalent log1p() transform.  
-
-new_mod_1 <- gam(log(value + 1) ~ year + month + 
-                 s(station, bs = 're'), 
-               data = dat)
-new_mod_2 <- gam(log(value + 1) ~ year * season_3 + 
-                 s(station, bs = 're'), 
-               data = dat)
-
-nested_data$lmers[nested_data$parameter == 'chl']        <- list(new_mod_1)
-nested_data$lmer_3_seas_2[nested_data$parameter == 'chl'] <- list(new_mod_2)
-nested_data <- nested_data %>%
-  filter(parameter != 'log1_chl')
+names(nested_data$lmer_s) <- nested_data$parm
 ```
 
 ### ANOVAs
 
-#### Month Model
-
 ``` r
 nested_data <- nested_data %>%
-  mutate(anova = map(lmers, function(mod) anova(mod)))
-names(nested_data$anova) <- nested_data$parameter
-
-nested_data$anova
-#> $secchi_2
-#> 
-#> Family: gaussian 
-#> Link function: identity 
-#> 
-#> Formula:
-#> value ~ year + month + s(station, bs = "re")
-#> 
-#> Parametric Terms:
-#>       df     F  p-value
-#> year   1 55.55 1.06e-13
-#> month  6 36.20  < 2e-16
-#> 
-#> Approximate significance of smooth terms:
-#>              edf Ref.df     F p-value
-#> s(station) 15.96  16.00 423.3  <2e-16
-#> 
-#> $temperature
-#> 
-#> Family: gaussian 
-#> Link function: identity 
-#> 
-#> Formula:
-#> value ~ year + month + s(station, bs = "re")
-#> 
-#> Parametric Terms:
-#>       df      F p-value
-#> year   1  225.6  <2e-16
-#> month  6 3214.6  <2e-16
-#> 
-#> Approximate significance of smooth terms:
-#>             edf Ref.df     F p-value
-#> s(station) 15.9   16.0 168.3  <2e-16
-#> 
-#> $salinity
-#> 
-#> Family: gaussian 
-#> Link function: identity 
-#> 
-#> Formula:
-#> value ~ year + month + s(station, bs = "re")
-#> 
-#> Parametric Terms:
-#>       df      F  p-value
-#> year   1  12.19 0.000485
-#> month  6 106.27  < 2e-16
-#> 
-#> Approximate significance of smooth terms:
-#>              edf Ref.df    F p-value
-#> s(station) 15.99  16.00 1065  <2e-16
-#> 
-#> $do
-#> 
-#> Family: gaussian 
-#> Link function: identity 
-#> 
-#> Formula:
-#> value ~ year + month + s(station, bs = "re")
-#> 
-#> Parametric Terms:
-#>       df       F p-value
-#> year   1   1.134   0.287
-#> month  6 992.928  <2e-16
-#> 
-#> Approximate significance of smooth terms:
-#>              edf Ref.df     F p-value
-#> s(station) 15.87  16.00 154.6  <2e-16
-#> 
-#> $pctsat
-#> 
-#> Family: gaussian 
-#> Link function: identity 
-#> 
-#> Formula:
-#> value ~ year + month + s(station, bs = "re")
-#> 
-#> Parametric Terms:
-#>       df     F  p-value
-#> year   1 12.20 0.000483
-#> month  6 72.72  < 2e-16
-#> 
-#> Approximate significance of smooth terms:
-#>              edf Ref.df     F p-value
-#> s(station) 15.86  16.00 133.8  <2e-16
-#> 
-#> $pH
-#> 
-#> Family: gaussian 
-#> Link function: identity 
-#> 
-#> Formula:
-#> value ~ year + month + s(station, bs = "re")
-#> 
-#> Parametric Terms:
-#>       df      F p-value
-#> year   1  1.372   0.242
-#> month  6 17.744  <2e-16
-#> 
-#> Approximate significance of smooth terms:
-#>             edf Ref.df     F p-value
-#> s(station) 15.9   16.0 150.4  <2e-16
-#> 
-#> $chl
-#> 
-#> Family: gaussian 
-#> Link function: identity 
-#> 
-#> Formula:
-#> log(value + 1) ~ year + month + s(station, bs = "re")
-#> 
-#> Parametric Terms:
-#>       df     F p-value
-#> year   1 4.990  0.0260
-#> month  6 2.535  0.0202
-#> 
-#> Approximate significance of smooth terms:
-#>                 edf   Ref.df F p-value
-#> s(station) 1.61e-08 3.00e+00 0   0.398
-```
-
-All models show statistically significant trends EXCEPT dissolved oxygen
-and pH.
-
-#### Seasonal Interactions Model
-
-``` r
-nested_data <- nested_data %>%
-  mutate(anova_3 = map(lmer_3_seas_2, function(mod) anova(mod)))
-names(nested_data$anova_3) <- nested_data$parameter
+  mutate(anova_3 = map(lmer_s, function(mod) anova(mod)))
+names(nested_data$anova_3) <- nested_data$parm
 
 nested_data$anova_3
 #> $secchi_2
@@ -552,24 +355,6 @@ nested_data$anova_3
 #>              edf Ref.df     F p-value
 #> s(station) 15.85  16.00 135.7  <2e-16
 #> 
-#> $pctsat
-#> 
-#> Family: gaussian 
-#> Link function: identity 
-#> 
-#> Formula:
-#> value ~ year * season_3 + s(station, bs = "re")
-#> 
-#> Parametric Terms:
-#>               df     F p-value
-#> year           1 9.647 0.00191
-#> season_3       2 2.299 0.10041
-#> year:season_3  2 2.346 0.09589
-#> 
-#> Approximate significance of smooth terms:
-#>              edf Ref.df     F p-value
-#> s(station) 15.86  16.00 130.9  <2e-16
-#> 
 #> $pH
 #> 
 #> Family: gaussian 
@@ -588,13 +373,13 @@ nested_data$anova_3
 #>             edf Ref.df     F p-value
 #> s(station) 15.9   16.0 149.7  <2e-16
 #> 
-#> $chl
+#> $chl_log1p
 #> 
 #> Family: gaussian 
 #> Link function: identity 
 #> 
 #> Formula:
-#> log(value + 1) ~ year * season_3 + s(station, bs = "re")
+#> value ~ year * season_3 + s(station, bs = "re")
 #> 
 #> Parametric Terms:
 #>               df      F  p-value
@@ -607,20 +392,16 @@ nested_data$anova_3
 #> s(station) 1.484e-08 2.000e+00 0     0.4
 ```
 
-Results are NOT the same. Salinity now shows no trend, while pH does.
-
--   Secchi shows no overall trend, but significant differences in
-    seasonal trends.  
 -   Temperatures shows a significant trend and also a significant
     interaction (a surprise!).  
 -   Salinity shows no significant trends or interactions.  
 -   DO shows no significant trends or interactions.  
--   Pct Saturation shows a significant trend, but no significant
-    interactions.  
+-   Secchi shows no overall trend, but significant differences in
+    seasonal trends.  
 -   pH shows significant trend, with interactions.  
 -   Chloride shows significant trend, with interactions.
 
-## Compare Slopes
+### Compare Slopes
 
 Here, we pull the slopes from both models to guide preparation of
 annotation for the graphics….
@@ -632,39 +413,28 @@ still on transformed y values (not `type =`response\`).
 
 ``` r
 nested_data <- nested_data %>%
-  mutate(slope = map(lmers,
+  mutate(s_one_slope = map(lmer_s,
                       function(mod) summary(emtrends(mod, 
                                                      ~ 1, 
                                                      var = "year")))) %>%
-  mutate(seas_one_slope = map(lmer_3_seas_2,
-                      function(mod) summary(emtrends(mod, 
-                                                     ~ 1, 
-                                                     var = "year")))) %>%
-  mutate(seas_three_slopes = map(lmer_3_seas_2,
+  mutate(s_three_slopes = map(lmer_s,
                       function(mod) summary(emtrends(mod, 
                                                      ~ season_3, 
                                                      var = "year"))))
-names(nested_data$slope) <- nested_data$parameter
-names(nested_data$seas_one_slope) <- nested_data$parameter
-names(nested_data$seas_three_slopes) <- nested_data$parameter
+names(nested_data$s_one_slope) <- nested_data$parm
+names(nested_data$s_three_slopes) <- nested_data$parm
 ```
 
 ``` r
-for ( p in nested_data$parameter) {
-  row <- nested_data[nested_data$parameter == p,]
+for ( p in nested_data$parm) {
+  row <- nested_data[nested_data$parm == p,]
   cat('\n\n',p,'\n')
-  print(row$slope[[1]])
-  print(row$seas_one_slope[[1]])
-  print(row$seas_three_slopes[[1]])
+  print(row$s_one_slope[[1]])
+  print(row$s_three_slopes[[1]])
 }
 #> 
 #> 
 #>  secchi_2 
-#>  1       year.trend      SE   df lower.CL upper.CL
-#>  overall   -0.00921 0.00124 5150  -0.0116 -0.00679
-#> 
-#> Results are averaged over the levels of: month, station 
-#> Confidence level used: 0.95 
 #>  1       year.trend      SE   df lower.CL upper.CL
 #>  overall   -0.00939 0.00132 5152   -0.012  -0.0068
 #> 
@@ -681,11 +451,6 @@ for ( p in nested_data$parameter) {
 #> 
 #>  temperature 
 #>  1       year.trend      SE   df lower.CL upper.CL
-#>  overall     0.0558 0.00372 5620   0.0485   0.0631
-#> 
-#> Results are averaged over the levels of: month, station 
-#> Confidence level used: 0.95 
-#>  1       year.trend      SE   df lower.CL upper.CL
 #>  overall     0.0809 0.00515 5622   0.0707    0.091
 #> 
 #> Results are averaged over the levels of: season_3, station 
@@ -700,11 +465,6 @@ for ( p in nested_data$parameter) {
 #> 
 #> 
 #>  salinity 
-#>  1       year.trend      SE   df lower.CL upper.CL
-#>  overall    -0.0251 0.00719 5565  -0.0392   -0.011
-#> 
-#> Results are averaged over the levels of: month, station 
-#> Confidence level used: 0.95 
 #>  1       year.trend      SE   df lower.CL upper.CL
 #>  overall    -0.0136 0.00768 5567  -0.0287  0.00146
 #> 
@@ -721,11 +481,6 @@ for ( p in nested_data$parameter) {
 #> 
 #>  do 
 #>  1       year.trend      SE   df lower.CL upper.CL
-#>  overall   -0.00179 0.00168 5502 -0.00509  0.00151
-#> 
-#> Results are averaged over the levels of: month, station 
-#> Confidence level used: 0.95 
-#>  1       year.trend      SE   df lower.CL upper.CL
 #>  overall   -0.00631 0.00191 5504  -0.0101 -0.00257
 #> 
 #> Results are averaged over the levels of: season_3, station 
@@ -739,32 +494,7 @@ for ( p in nested_data$parameter) {
 #> Confidence level used: 0.95 
 #> 
 #> 
-#>  pctsat 
-#>  1       year.trend     SE   df lower.CL upper.CL
-#>  overall     0.0709 0.0203 5457   0.0311    0.111
-#> 
-#> Results are averaged over the levels of: month, station 
-#> Confidence level used: 0.95 
-#>  1       year.trend     SE   df lower.CL upper.CL
-#>  overall     0.0886 0.0216 5459   0.0462    0.131
-#> 
-#> Results are averaged over the levels of: season_3, station 
-#> Confidence level used: 0.95 
-#>  season_3 year.trend     SE   df lower.CL upper.CL
-#>  Spring       0.1357 0.0437 5459   0.0501   0.2214
-#>  Summer       0.0319 0.0283 5459  -0.0235   0.0874
-#>  Fall         0.0982 0.0372 5459   0.0252   0.1711
-#> 
-#> Results are averaged over the levels of: station 
-#> Confidence level used: 0.95 
-#> 
-#> 
 #>  pH 
-#>  1       year.trend       SE   df lower.CL upper.CL
-#>  overall  -0.000535 0.000457 5067 -0.00143 0.000361
-#> 
-#> Results are averaged over the levels of: month, station 
-#> Confidence level used: 0.95 
 #>  1       year.trend       SE   df  lower.CL upper.CL
 #>  overall   0.000339 0.000487 5069 -0.000615  0.00129
 #> 
@@ -779,12 +509,7 @@ for ( p in nested_data$parameter) {
 #> Confidence level used: 0.95 
 #> 
 #> 
-#>  chl 
-#>  1       year.trend      SE  df lower.CL upper.CL
-#>  overall    -0.0149 0.00668 416  -0.0281 -0.00179
-#> 
-#> Results are averaged over the levels of: month, station 
-#> Confidence level used: 0.95 
+#>  chl_log1p 
 #>  1       year.trend      SE  df lower.CL upper.CL
 #>  overall    -0.0191 0.00711 418  -0.0331 -0.00513
 #> 
@@ -809,17 +534,10 @@ which_sig <- function(upper, lower) {
   c('Spring', 'Summer', 'Fall')[sig_list]
 }
 
-
-test <- nested_data$seas_three_slopes[[3]] 
-which_sig(test$upper.CL, test$lower.CL)
-#> [1] "Summer"
-```
-
-``` r
 nested_data <- nested_data %>%
-  mutate(seas_change = map(seas_three_slopes,
+  mutate(seas_change = map(s_three_slopes,
                       function(df) which_sig(df$upper.CL, df$lower.CL)))
-names(nested_data$seas_change) <- nested_data$parameter
+names(nested_data$seas_change) <- nested_data$parm
 nested_data$seas_change
 #> $secchi_2
 #> [1] "Summer" "Fall"  
@@ -833,41 +551,34 @@ nested_data$seas_change
 #> $do
 #> [1] "Summer" "Fall"  
 #> 
-#> $pctsat
-#> [1] "Spring" "Fall"  
-#> 
 #> $pH
 #> [1] "Spring" "Summer"
 #> 
-#> $chl
+#> $chl_log1p
 #> [1] "Spring" "Summer"
 ```
 
-# Deriving Annotations from general results.
+## Deriving Annotations from general results.
 
-## Terminology:
+We want to say the following: \* Temperatures: Highlight overall trend.
+Interaction is significant, but small.  
+\* “Increasing \~ 0.56 degrees C per decade”  
+\* Salinity: ANOVA not significant. Possible weak summer trend.  
+\* “No trend”  
+\* DO: No significant terms by ANOVA, so don’t want to interpret
+marginal means.  
+\* “No trend”  
+\* pH: Highlight different seasonal patterns that cancel each other
+out.  
+\* “Spring increase, summer decrease”.  
+\* Secchi: Show seasonal data and highlight seasonal trend, with
+declining. water quality in summer and fall, but little change in
+spring.  
+\* “Decrease Summer and Fall”  
+\* Chlorophyll: Overall trend, but strong seasonal differences.  
+\* “Decrease in spring and summer”
 
-Use of “Decrease” and “Increase” are consistent, but potentially
-confusing. We want to add signals for “improving” or “worsening”
-conditions, which sometimes correspond to increasing and sometimes
-decreasing values.
-
-## Notes
-
-We want to say the following: \* Secchi: Show seasonal data and
-highlight seasonal trend, with declining water quality in summer and
-fall, but little change in spring. \* “Decrease Summer and Fall” \*
-Temperatures: Highlight overall trend. Interaction is significant, but
-small. \* “Increasing \~ 0.56 degrees C per decade” \* Salinity:
-Emphasize uncertainty. Possible weak trend. \* “Possible summer
-decrease” \* DO: No significant terms by ANOVA, so don’t want to
-interpret marginal means \* “No trend” \* Pct Saturation: Highlight
-overall trend \* “Increase in spring and fall” \* pH: Highlight
-different seasonal patterns that cancel each other out. \* “Spring
-increase, summer decrease” \* Chlorophyll: Overall trend, but strong
-seasonal differences \* “Decrease in spring and summer”
-
-### Marginal Means
+## Marginal Means
 
 These means are all marginal to the identity of the stations. It’s worth
 noting that differences in slope that jump out in these graphics often
@@ -876,211 +587,311 @@ data. Also, some “statistically significant” differences in seasonal
 slopes are pretty small, on pretty small slopes, and thus are probably
 not worth interpreting.
 
+Here we use the `emmip()` function, which produces an interaction plot,
+but suppress the plots, as we want to add related data to plots of our
+own.
+
 ``` r
 nested_data <- nested_data %>%
-  mutate(emmi_3 = map(lmer_3_seas_2, function(mod) emmip(mod, season_3 ~ year, 
-                                                        at = list(year = 1993:2020),
-                                                       plotit = FALSE)))
+  mutate(emmi_3 = map(lmer_s, function(mod) emmip(mod, season_3 ~ year,
+                                                         at = list(year = 1993:2020),
+                                                         plotit = FALSE)))
 ```
 
-# Graphics
+### Limit Forecasts Chlorophyll
 
-## Primary Plots
-
-We could construct this as a function, but the for loop is a bit faster
-to develop.
+The code we just ran generated “predictions” for chlorophyll for years
+in which we actually have no chlorophyll data. We could run `emmip()`
+again, but it is also easy to simply select the right rows from the
+existing predictions.
 
 ``` r
-plts <- list()
-for (p in nested_data$parameter) {
-  row <- nested_data[nested_data$parameter == p,]
-  dat <- row$data[[1]]
-  preds <- row$emmi_3[[1]]
-  label <- row$label
-  units <- row$units
-  
-  preds <-  preds %>%
-    mutate(UCL = yvar + 1.96 * SE,
-           LCL = yvar - 1.96 * SE)
-  
-  plt <-    ggplot() +
-    geom_jitter(mapping = aes(year, value, color = season_3), data = dat, 
-                alpha = 0.1, width = 0.25) +
-    
-    geom_line(mapping = aes(x = xvar, y = yvar, color = tvar), data = preds,
-              size = 1) +
-    #geom_ribbon(aes(x = xvar, ymin = LCL, ymax = UCL, fill = tvar), data = preds,
-    #            color = NA, alpha = 0.15) +
-    
-    guides(fill = 'none') +
+row <- nested_data[nested_data$parm == 'chl_log1p',]
+preds <- row$emmi_3[[1]]
+preds <- preds %>% filter(year > 2000)
+
+nested_data$emmi_3[nested_data$parm == 'chl_log1p'] <- list(preds)
+```
+
+# Part 3: Graphics
+
+## Facet Graphics
+
+We want to generate facet graphics rather than individual graphics. The
+facet graphics should mimic the organization of the graphics showing
+recent conditions. That means we want to order parameters in the same
+way, and use the same `log(x+1)` transformed axis for Chlorophyll.
+
+Facet graphics are built off of data frames with an indicator variable
+that assigns data to facets. So this will require rethinking the
+organization of data. We need to be able to plot both raw data and
+prediction lines. That means we will assemble facet graphics from two
+data frames, one of data, and one of predictions.
+
+### Data Set up
+
+``` r
+list_df <- nested_data$data
+names(list_df) <-  nested_data$parm
+data_sel <- bind_rows(list_df, .id = 'parm') %>%
+  filter(parm %in% c('temperature', 'salinity', 'do', 
+                          'pH', 'secchi_2', 'chl_log1p')) %>%
+  mutate(parm = factor(parm,
+                            levels = c('temperature', 'salinity', 'do', 
+                                       'pH', 'secchi_2', 'chl_log1p')))
+
+list_df <- nested_data$emmi_3
+names(list_df) <-  nested_data$parm
+predicts_sel <- bind_rows(list_df, .id = 'parm') %>%
+  filter(parm %in% c('temperature', 'salinity', 'do', 
+                          'pH', 'secchi_2', 'chl_log1p')) %>%
+  mutate(parm = factor(parm,
+                            levels = c('temperature', 'salinity', 'do', 
+                                       'pH', 'secchi_2', 'chl_log1p')))
+```
+
+### New Facet Labels
+
+``` r
+labs <- paste0(nested_data$label, 
+                           if_else((! is.na(nested_data$units) & 
+                                      ! nchar(nested_data$units) == 0),
+                                       paste0(' (', nested_data$units, ')'), ''))
+names(labs) <- nested_data$parm
+cbind(labs)
+#>             labs                     
+#> secchi_2    "Secchi Depth (m)"       
+#> temperature "Temperature (°C)"       
+#> salinity    "Salinity (PSU)"         
+#> do          "Dissolved Oxygen (mg/l)"
+#> pH          "pH"                     
+#> chl_log1p   "Chlorophyll A (mg/l)"
+```
+
+### Draft Graphic
+
+``` r
+p <- ggplot(data_sel, aes(x = year, y = value)) +
+    geom_jitter(aes(color = season_3), width = 0.3, height = 0, 
+                alpha = 0.1) +
+   geom_line(data = predicts_sel, 
+             mapping = aes(x = year, y = yvar, color = tvar),
+             size = 1) +
+    xlab('') +
+    ylab('') +
+
     scale_color_manual(values = cbep_colors2()[c(1,2,4)],
                        name = '',
                 guide = guide_legend(override.aes = list(alpha = 1))) +
-    scale_fill_manual(values = cbep_colors2()[c(1,2,4)]) +
-    
-    theme_cbep(base_size = 14) +
-    theme(legend.position = 'bottom',
-          axis.title.y = element_text(size = 12),
-          #axis.line = element_line(color = 'gray85')
-          ) +
+  
+    theme_cbep(base_size = 12) +
+    # theme(axis.text.x = element_text(angle = 90,
+    #                                  size = 8,
+    #                                  hjust = 1,
+    #                                  vjust = 0),
+    #       axis.ticks.length.x = unit(0, 'cm')) +
+  
+  theme(legend.position = 'bottom') +
+  guides(color = guide_legend(override.aes = list(size = 3, alpha = 0.5) ) ) +
+  
+  facet_wrap(~parm, nrow = 3,
+               scale = 'free_y',
+               labeller = labeller(parm = labs))
+p
+```
 
-    ylab(paste0(label, 
-                if_else(nchar(units) > 0, ' (',''),
-                units,
-                if_else(nchar(units) > 0, ')',''))) +
-    xlab('') +
-    labs(color = '')
- plts[p] <- list(plt)
-  print(plt)
+<img src="Surface_Trends_Graphics_files/figure-gfm/unnamed-chunk-4-1.png" style="display: block; margin: auto;" />
+
+### Fixing the Chlorophyll Y Axis
+
+The Chlorophyll values we model and plot are actually a transformation
+of the  
+craw chlorophyll observations. As such, the values plotted are
+meaningless to potential readers. We need to provide a axis that
+indicates the non-linearity of the Y axis.
+
+A little Googling suggests there is no easy way to adjust the Y axis
+independently in a facet display. For example, see
+[here:](https://stackoverflow.com/questions/11585954/varying-axis-labels-formatter-per-facet-in-ggplot-r)
+for a partial explanation and a work around.
+
+However, it **is** possible to define axis breaks and labels using
+functions.  
+We can create a function to produce appropriate breaks and another to
+provide labels for the Chlorophyll plot, if only we can construct a
+function that provides different values depending on the sub-plot we are
+in.
+
+The help file for `scale_y_continuous()` provides the option of setting
+the \`breaks parameter to:
+
+> A function that takes the limits as input and returns breaks as output
+> (e.g., a function returned by scales::extended\_breaks())
+
+The challenge here is that “facet” does not “know” which subplot we are
+in, and we want to change the breaks and labels from the defaults only
+for the chlorophyll plot.
+
+We might be able to tell which sub-plot we are in by looking at the axis
+limits, which are passed as the argument to the `breaks` function.
+
+Since we do not set the axis limits manually, we don’t know what the
+axis limits are in general, but we can make good guesses based on the
+draft graphic.
+
+Luckily, in our use case, the upper axis limit for the (transformed)
+chlorophyll data is lower than any of the others. Eyeballing the draft
+graphic, it looks like the upper limit is around 5, while the next
+lowest maximum figure is well over 5.
+
+A similar problem (and solution) faces setting the labels for the
+breaks. but here, since we will have SET the breaks, we can look to see
+if we have those specific breaks, and if so, set the labels
+appropriately. It’s slightly trickier than that, but that is the basic
+concept.
+
+#### Create Breaks Function
+
+``` r
+preferred_breaks =  c(0, 1,  5, 10, 50)
+
+my_breaks_fxn <- function(lims) {
+  #browser()
+  if(max(lims) < 6) {
+    # Then we're looking at our transformed Chl data
+  a <- preferred_breaks
+    return(log(a +1))
+  }
+  else {
+    # Return the default breaks, by calling the default breaks fxn
+    return(labeling::extended(lims[[1]], lims[[2]], 5))
+  }
 }
 ```
 
-<img src="Surface_Trends_Graphics_files/figure-gfm/make_plots-1.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/make_plots-2.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/make_plots-3.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/make_plots-4.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/make_plots-5.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/make_plots-6.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/make_plots-7.png" style="display: block; margin: auto;" />
+#### Create Label Function
+
+We are cheating a bit here by plotting transformed data, but providing
+**labels** that are back transformed. That work is conducted by the
+labeling function.
 
 ``` r
-nested_data$plt <- plts
+my_label_fxn <- function(brks) {
+  # frequently, brks contians NA in place of one or more 
+  # of the candidate brks, even after we pass a vector of specific breaks.
+  # In particular, "pretty" breaks outside the range of the data
+  # are dropped and replaced with NA.
+  a <- preferred_breaks
+  b <- round(log(a+1), 3)
+  real_breaks = round(brks[! is.na(brks)], 3)
+  if (all(real_breaks %in% b)) {
+    # then we have our transformed Chl data
+    return(a)
+  }
+  else {
+    return(brks)
+  }
+}
 ```
 
-## Fix Chlorophyll Models and Graphic
+## Assembling the Final Graphic
 
-We need to plot the chlorophyll data on a transformed axis, which takes
-several steps.
-
-1.  Extract marginal trends from the revised model with
-    `type == "response"`  
-2.  Redraw the plot, with an added transformation on the Y axis, while
-    controlling the locations of the breaks.
-
-`emmeans` recognizes the log(value + 1) transform, but it does not
-recognize the equivalent log1p() transform.
+### Base Graphic
 
 ``` r
-mod<- nested_data[nested_data$parameter == 'chl',]$lmer_3_seas_2[[1]]
-pred <- emmip(mod, season_3 ~ year, 
-             at = list(year = 1993:2020), type = 'response',
-             plotit = FALSE) %>%
-  filter(year > 2000)
+p_jit <- ggplot(data_sel, aes(x = year, y = value)) +
+    geom_jitter(aes(color = season_3), width = 0.3, height = 0, 
+                alpha = 0.1) +
+   geom_line(data = predicts_sel, 
+             mapping = aes(x = year, y = yvar, color = tvar),
+             size = 1) +
+    xlab('') +
+    ylab('') +
 
-nested_data$emmi_3[nested_data$parameter == 'chl'] <- list(pred)
-```
-
-#### Updated Chlorophyll Plot
-
-The primary change in the code here is addition of
-`scale_y_continuous(trans = 'log1p')`. Unlike emmeans, ggplot recognizes
-the transform. We also have to explicitly control the x axis to match
-the other plots.
-
-``` r
-row <- nested_data[nested_data$parameter == 'chl',]
-  dat <- row$data[[1]]
-  preds <- row$emmi_3[[1]]
-  label <- row$label
-  units <- row$units
-  
-  preds <-  preds %>%
-    mutate(UCL = yvar + 1.96 * SE,
-           LCL = yvar - 1.96 * SE)
-  
-  plt <-  ggplot() +
-    geom_jitter(mapping = aes(year, value, color = season_3), data = dat, 
-                alpha = 0.1, width = 0.25) +
-    
-    geom_line(mapping = aes(x = xvar, y = yvar, color = tvar), data = preds,
-              size = 1) +
-    #geom_ribbon(aes(x = xvar, ymin = LCL, ymax = UCL, fill = tvar), data = preds,
-    #            color = NA, alpha = 0.15) +
-    
-    guides(fill = 'none') +
     scale_color_manual(values = cbep_colors2()[c(1,2,4)],
                        name = '',
                 guide = guide_legend(override.aes = list(alpha = 1))) +
-    scale_fill_manual(values = cbep_colors2()[c(1,2,4)]) +
-    
-    theme_cbep(base_size = 14) +
-    theme(legend.position = 'bottom',
-          axis.title.y = element_text(size = 12),
-          axis.line = element_line(color = 'gray85')) +
-
-    ylab(paste0(label, 
-                if_else(nchar(units) > 0, ' (',''),
-                units,
-                if_else(nchar(units) > 0, ')',''))) +
-    xlab('') +
-    labs(color = '') +
-    xlim(1993, 2020) +
-    scale_y_continuous(trans = 'log1p', breaks = c(0,1,  5, 10, 50, 100, 200))
-  print(plt)
-#> Warning: Removed 12 rows containing missing values (geom_point).
+  
+    scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
+  
+    theme_cbep(base_size = 12) +
+    # theme(axis.text.x = element_text(angle = 90,
+    #                                  size = 8,
+    #                                  hjust = 1,
+    #                                  vjust = 0),
+    #       axis.ticks.length.x = unit(0, 'cm')) +
+  
+  theme(legend.position = 'bottom')
 ```
 
-<img src="Surface_Trends_Graphics_files/figure-gfm/fix_chl_plot-1.png" style="display: block; margin: auto;" />
-
 ``` r
-  nested_data$plt[nested_data$parameter == 'chl'] <- list(plt)
+p_jit +
+  facet_wrap(~parm, nrow = 3,
+               scale = 'free_y',
+               labeller = labeller(parm = labs))
 ```
 
-# Add Annotations
+<img src="Surface_Trends_Graphics_files/figure-gfm/jitter_wide_bare-1.png" style="display: block; margin: auto;" />
 
-After some experimentation, we decided to place annotations and Symbols
-with functions included in the `ggpmisc` package, specifically, the
-`geom_text_npc()` function, and an overridden version of `annotate()`
-that allows absolute coordinates rather than data coordinates. This
-makes the placement of annotations in a series of similar graphics a bit
-more straight forward.
+### Add Annotations
 
-## Define Annotations
+#### A note on Terminology
+
+Use of “Decrease” and “Increase” are consistent, but potentially
+confusing. We want to add signals for “improving” or “worsening”
+conditions, which sometimes correspond to increasing and sometimes
+decreasing values. We do that, below, with graphical icons.
+
+#### Define Annotations
 
 ``` r
-annotations <- c("Decrease Summer and Fall",
-                 "Increasing ~ 0.56 degrees C\nper decade",
-                 "Possible summer decrease",
+annotations <- c(paste0(" +0.56","\U00B0", "C per decade"),
                  "No trend",
-                 "Increase in spring and fall",
+                 "No trend",
                  "Spring increase, summer decrease",
+                 "Decrease summer and fall",
                  "Decrease in spring and summer")
 nested_data$annot <- annotations
+nested_data$annot
+#> [1] " +0.56°C per decade"              "No trend"                        
+#> [3] "No trend"                         "Spring increase, summer decrease"
+#> [5] "Decrease summer and fall"         "Decrease in spring and summer"
 ```
 
-## Annotation Placement
+#### Annotation Placement
 
 Most annotations can go in upper right corner. We start with that, then
 modify as needed.
 
 ``` r
-ann_xloc <- rep('left', length(nested_data$parameter))
-ann_yloc <- rep('bottom', length(nested_data$parameter))
+ann_xloc <- rep('left', length(nested_data$parm))
+ann_yloc <- rep('bottom', length(nested_data$parm))
 
-ann_xloc[1] <- 'right'    # Secchi
-ann_yloc[1] <- 'top'    # Secchi
-ann_xloc[2] <- 'right'  # temperature
-ann_xloc[7] <- 'right'  # Chlorophyll
+ann_xloc[1] <- 'right'  # temperature
+ann_xloc[5] <- 'right'    # Secchi
+ann_yloc[5] <- 'top'    # Secchi
+ann_xloc[6] <- 'right'  # Chlorophyll
 
-nested_data$ann_x_loc <- ann_xloc
-nested_data$ann_y_loc <- ann_yloc
+annot <- tibble(parm = factor(levels(nested_data$parm), 
+                              levels = levels(nested_data$parm)),
+                annot = annotations, 
+                ann_xloc = ann_xloc, ann_yloc = ann_yloc)
 ```
-
-## Demo: Add Annotations to Plots
 
 ``` r
-for (p in nested_data$parameter) {
-  row <- nested_data[nested_data$parameter == p,]
-  print(row$plt[[1]] +
-        annotate('text_npc', npcx = row$ann_x_loc, npcy = row$ann_y_loc, 
-                 label = row$annot,
-                 hjust = 'inward',
-                 size = 3.5))
-
-}
+p_jit +
+  facet_wrap(~parm, nrow = 3,
+               scale = 'free_y',
+               labeller = labeller(parm = labs)) +
+  geom_text_npc(data = annot, 
+            mapping = aes(npcx = ann_xloc, npcy = ann_yloc, label = annot),
+            hjust = 'inward',
+            size = 3.25)
 ```
 
-<img src="Surface_Trends_Graphics_files/figure-gfm/demo_annot-1.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_annot-2.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_annot-3.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_annot-4.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_annot-5.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_annot-6.png" style="display: block; margin: auto;" />
+<img src="Surface_Trends_Graphics_files/figure-gfm/jitter_wide_annot-1.png" style="display: block; margin: auto;" />
 
-    #> Warning: Removed 12 rows containing missing values (geom_point).
-
-<img src="Surface_Trends_Graphics_files/figure-gfm/demo_annot-7.png" style="display: block; margin: auto;" />
-
-# Symbols
+### Add Symbols
 
 In the upper left, we want to offer symbols to signal improving or
 worsening .conditions. Here we search for some suitable unicode glyphs.
@@ -1090,188 +901,80 @@ Could use “troubling” and “hopeful” to describe trends…
 ``` r
 symbols = 
 c('worse',
+  'steady',
+  'steady',
+  'steady',
   'worse',
-  'steady',
-  'steady',
-  'better',
-  'steady',
   'better')
-nested_data$symbols <- factor(symbols, levels = c('worse', 'steady', 'better'))
-```
 
-The challenge we face is that we are already using a color scale for or
-core symbols. what we want to do here is place a glyph without using a
-color scale.
-
-We can consider either unicode arrow glyph or simple triangle shapes as
-the “up” and “down” symbols for things getting better or things getting
-worse.
-
-## Possible Unicode Glyphs
-
-### Hollow Shapes
-
-``` r
-cat('\U1403')
-#> <U+1403>
-cat('\U25A1')
-#> <U+25A1>
-cat('\U25AD')
-#> <U+25AD>
-cat('\U1401')
-#> <U+1401>
-```
-
-### Solid Shapes
-
-``` r
-cat('\U25bc')
-#> <U+25BC>
-cat('\U25ac')
-#> <U+25AC>
-cat('\U25b2')
-#> <U+25B2>
-cat('\U25fc')
-#> <U+25FC>
-cat('\n')
-```
-
-``` r
-myglyphs <- factor(c('\U25bc', '\U25ac','\U25b2'),
+myglyphs <- factor(c('\U25bc', '','\U25b2'),
                    levels = c('\U25bc', '\U25ac','\U25b2'))
+mycolors = c('red4', 'gray', 'green2')
+
+
+syms <- tibble(parm = factor(levels(nested_data$parm), 
+                              levels = levels(nested_data$parm))) %>%
+  mutate(symbol =  factor(symbols, levels = c('worse', 'steady', 'better')),
+         icons  =   myglyphs[as.numeric(symbol)],
+         cols = mycolors[as.numeric(symbol)])
+syms
+#> # A tibble: 6 x 4
+#>   parm        symbol icons cols  
+#>   <fct>       <fct>  <fct> <chr> 
+#> 1 temperature worse  <U+25BC>     red4  
+#> 2 salinity    steady <NA>  gray  
+#> 3 do          steady <NA>  gray  
+#> 4 pH          steady <NA>  gray  
+#> 5 secchi_2    worse  <U+25BC>     red4  
+#> 6 chl_log1p   better <U+25B2>     green2
 ```
 
-### Heavy Arrows
-
-Unfortunately, the following nice arrows show in RStudio, but do not
-plot properly in cairo’s pdf engine (at least with the default font).
+### Final Products
 
 ``` r
-cat('\U1f81f')
-#> <U+0001F81F>
-cat('\U2261')
-#> =
-cat('\U1f81d')
-#> <U+0001F81D>
+p_jit +
+  facet_wrap(~parm, nrow = 3,
+               scale = 'free_y',
+               labeller = labeller(parm = labs)) +
+  geom_text_npc(data = annot, 
+            mapping = aes(npcx = ann_xloc, npcy = ann_yloc, label = annot),
+            hjust = 'inward',
+            size = 3.25) +
+
+  geom_text_npc(data = syms, mapping = aes(label = icons),
+                npcx = 'left', npcy = 'top', size = 7, 
+                color = c('red3', 'grey', 'grey', 'grey', 'red3', 'green2'))
+#> Warning: Removed 3 rows containing missing values (geom_text_npc).
+```
+
+<img src="Surface_Trends_Graphics_files/figure-gfm/jitter_wide_complete-1.png" style="display: block; margin: auto;" />
+
+``` r
+
+ggsave('figures/wq_trends_six_wide.pdf', device = cairo_pdf, width = 7, height = 7)
+#> Warning: Removed 3 rows containing missing values (geom_text_npc).
 ```
 
 ``` r
-altglyphs <- factor(c('\U1f81f', '\U2261','\U1f81d'),
-                   levels = c('\U1f81f', '\U2261','\U1f81d'))
+p_jit +
+  facet_wrap(~parm, nrow = 6,
+               scale = 'free_y',
+               labeller = labeller(parm = labs)) +
+  geom_text_npc(data = annot, 
+            mapping = aes(npcx = ann_xloc, npcy = ann_yloc, label = annot),
+            hjust = 'inward',
+            size = 3.25) +
+
+  geom_text_npc(data = syms, mapping = aes(label = icons),
+                npcx = 'left', npcy = 'top', size = 7, 
+                color = c('red3', 'grey', 'grey', 'grey', 'red3', 'green2'))
+#> Warning: Removed 3 rows containing missing values (geom_text_npc).
 ```
 
-### Alternate “No Change” Glyphs
+<img src="Surface_Trends_Graphics_files/figure-gfm/jitter_long_complete-1.png" style="display: block; margin: auto;" />
 
 ``` r
-cat('\U2248')
-#> ˜
-cat('\U2194')
-#> <U+2194>
+
+ggsave('figures/wq_trends_six_long.pdf', device = cairo_pdf, width = 7, height = 7)
+#> Warning: Removed 3 rows containing missing values (geom_text_npc).
 ```
-
-## Demo Glyphs
-
-Although the horizontal bar does not plot correctly here, it does,
-below.
-
-``` r
-shapes <- tibble(x = 1:3, y = 1,
-                 glyph = myglyphs) 
-ggplot(shapes, aes(x,y)) +
-  geom_text(aes(label = glyph, color = glyph), size = 12) +
-  scale_color_manual(values = c('red' , 'gray', 'green')) +
-  guides(color = 'none') +
-  theme_void()
-```
-
-<img src="Surface_Trends_Graphics_files/figure-gfm/demo_myglyphs-1.png" style="display: block; margin: auto;" />
-
-``` r
-shapes <- tibble(x = 1:3, y = 1,
-                 glyph = altglyphs) 
-ggplot(shapes, aes(x,y)) +
-  geom_text(aes(label = glyph, color = glyph), size = 12) +
-  scale_color_manual(values = c('red' , 'gray', 'green')) +
-  guides(color = 'none') +
-  theme_void()
-```
-
-<img src="Surface_Trends_Graphics_files/figure-gfm/demo_altglyphs-1.png" style="display: block; margin: auto;" />
-
-Unfortunately, those glyphs don’t plot with the cairo\_pdf engine. It
-may be that the font does not include those glyphs, or that cairo can
-not handle those unicode values.
-
-## Demo Add Glyphs to Plots
-
-``` r
-for (p in nested_data$parameter) {
-  row <- nested_data[nested_data$parameter == p,]
-  print(row$plt[[1]] +
-          if(row$symbols == 'better') {
-            annotate('text_npc', npcx = 'left', npcy = 'top',
-                     label = myglyphs[3], color = 'green2',
-                     size = 7)
-          }
-        else if(row$symbols == 'worse'){
-          annotate('text_npc', npcx = 'left', npcy = 'top',
-                   label = myglyphs[1], color = 'red4',
-                   size = 7)
-        }
-        # else {
-        #   annotate('text_npc', npcx = 'left', npcy = 'top',
-        #            label = myglyphs[2], color = 'gray50',
-        #            size = 7)          
-        # }
-  )
-  
-}
-```
-
-<img src="Surface_Trends_Graphics_files/figure-gfm/demo_symbols-1.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_symbols-2.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_symbols-3.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_symbols-4.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_symbols-5.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/demo_symbols-6.png" style="display: block; margin: auto;" />
-
-    #> Warning: Removed 12 rows containing missing values (geom_point).
-
-<img src="Surface_Trends_Graphics_files/figure-gfm/demo_symbols-7.png" style="display: block; margin: auto;" />
-
-# Add Both
-
-``` r
-for (p in nested_data$parameter) {
-  row <- nested_data[nested_data$parameter == p,]
-  print(row$plt[[1]] +
-          annotate('text_npc', npcx = row$ann_x_loc, npcy = row$ann_y_loc, 
-                 label = row$annot, family = 'Montserrat',
-                 size = 3) +
-    
-        if(row$symbols == 'better') {
-            annotate('text_npc', npcx = 'left', npcy = 'top',
-                     label = myglyphs[3], color = 'green2',
-                     size = 7)
-          }
-        else if(row$symbols == 'worse'){
-          annotate('text_npc', npcx = 'left', npcy = 'top',
-                   label = myglyphs[1], color = 'red4',
-                   size = 7)
-        }
-        # else {
-        #   annotate('text_npc', npcx = 'left', npcy = 'top',
-        #            label = myglyphs[2], color = 'gray50',
-        #            size = 7)          
-        # }
-  )
-  fn <- paste0('focb_s_trend_', p, '.pdf')
-  fp <- file.path('figures', fn)
-  ggsave(fp, device = cairo_pdf, width = 3.5, height = 3.25)
-
-
-}
-```
-
-<img src="Surface_Trends_Graphics_files/figure-gfm/final_graphics-1.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/final_graphics-2.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/final_graphics-3.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/final_graphics-4.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/final_graphics-5.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/final_graphics-6.png" style="display: block; margin: auto;" />
-
-    #> Warning: Removed 12 rows containing missing values (geom_point).
-
-    #> Warning: Removed 12 rows containing missing values (geom_point).
-
-<img src="Surface_Trends_Graphics_files/figure-gfm/final_graphics-7.png" style="display: block; margin: auto;" />
