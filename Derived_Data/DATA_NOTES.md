@@ -10,7 +10,7 @@ impervious cover in proximity to FOCB monitoring locations. Details are
 provided in the data notes in the GIS folder.
 
 "station_summary.csv" contains medians and means of recent FOCB water quality
-data, by Station.  "Recent" her refers to the five year period 2015 through
+data, by Station.  "Recent" here refers to the five year period 2015 through
 2019. The data were derived in and exported from the
-"Surface_Analysis_Recent.Rmd" notebook, in hte "Analysis" folder. Details can be
+"Surface_Analysis_Recent.Rmd" notebook, in the "Analysis" folder. Details can be
 found there.

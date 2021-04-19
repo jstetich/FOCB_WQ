@@ -289,7 +289,7 @@ fn    <- 'station_summary.csv'
 fpath <- file.path(sibling,fn)
 
 fpath = 
-write_csv(sum_data, fpath)
+write_csv(sum_data, fpath, na = '')
 ```
 
 ## Create Nested Tibble
