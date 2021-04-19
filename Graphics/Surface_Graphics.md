@@ -506,6 +506,23 @@ ggsave('figures/surface_6_violin.pdf', device = cairo_pdf,
 Here the situation is a bit easier, as we do not have to plot the
 extreme outliers, and only show medians and the interquartile range.
 
+But note that our Breaks function no longer works, as the limits for the
+Secchi depth and limits for (untransformed) chlorophyll now overlap.
+
+``` r
+my_breaks_fxn_2 <- function(lims) {
+  #browser()
+  if(max(lims) < 3) {
+    # Then we're looking at our transformed Chl data
+  a <- prefered_breaks
+    return(log(a +1))
+  }
+  else {
+    return(labeling::extended(lims[[1]], lims[[2]], 5))
+  }
+}
+```
+
 ``` r
 p_bar <- ggplot(data_long, aes(x = station_name, y = value)) +
     stat_summary(fun = median, na.rm = TRUE,
@@ -516,7 +533,7 @@ p_bar <- ggplot(data_long, aes(x = station_name, y = value)) +
                  geom = 'linerange', 
                  color = cbep_colors()[2]) + 
   
-    scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
+    scale_y_continuous (breaks = my_breaks_fxn_2, labels = my_label_fxn) +
     xlab('') +
     ylab('') +
    

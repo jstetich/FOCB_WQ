@@ -330,7 +330,7 @@ same `log(x+1)` transformed axis for Chlorophyll.
 Facet graphics are built off of data frames with an indicator variable that
 assigns data to facets. So this will require rethinking the organization of 
 data. We need to be able to plot both raw data and prediction lines.
-That means we will assemble facet graphics from two data frames, one of data, 
+That means we will assemble facet graphics from two data frames, one of data,
 and one of predictions.
 
 ### Data Set up
@@ -630,5 +630,44 @@ p_jit +
 ggsave('figures/wq_trends_six_long.pdf', device = cairo_pdf, width = 7, height = 7)
 ```
   
+## Separate Graphics
+```{r, fig.height = 3, fig.width = 5}
+for (pp in levels(data_sel$parm)) {
+  dat <- data_sel %>%
+    filter(parm == pp)
+  preds <- predicts_sel %>%
+    filter(parm == pp)
+  ann <- annot %>%
+    filter(parm == pp)
   
-  
+  plt1 <- ggplot(dat, aes(x = year, y = value)) +
+    geom_jitter(aes(color = season_3), width = 0.3, height = 0, 
+                alpha = 0.1) +
+    geom_line(data = preds, 
+              mapping = aes(x = year, y = yvar, color = tvar),
+              size = 1) +
+    geom_text_npc(data = ann, 
+            mapping = aes(npcx = ann_xloc, npcy = ann_yloc, label = annot),
+            hjust = 'inward',
+            size = 3.25) +
+    
+    xlab('') +
+    ylab(labs[pp]) +
+    
+    scale_color_manual(values = cbep_colors2()[c(1,2,4)],
+                       name = '',
+                       guide = guide_legend(override.aes = list(alpha = 1))) +
+    
+    scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
+    
+    theme_cbep(base_size = 12) +
+    # theme(axis.text.x = element_text(angle = 90,
+    #                                  size = 8,
+    #                                  hjust = 1,
+    #                                  vjust = 0),
+    #       axis.ticks.length.x = unit(0, 'cm')) +
+    
+    theme(legend.position = 'bottom')
+  print(plt1)
+}
+```

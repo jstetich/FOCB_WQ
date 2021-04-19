@@ -38,6 +38,7 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
         -   [Add Annotations](#add-annotations)
         -   [Add Symbols](#add-symbols)
         -   [Final Products](#final-products)
+    -   [Separate Graphics](#separate-graphics)
 
 <img
     src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
@@ -978,3 +979,48 @@ p_jit +
 ggsave('figures/wq_trends_six_long.pdf', device = cairo_pdf, width = 7, height = 7)
 #> Warning: Removed 3 rows containing missing values (geom_text_npc).
 ```
+
+## Separate Graphics
+
+``` r
+for (pp in levels(data_sel$parm)) {
+  dat <- data_sel %>%
+    filter(parm == pp)
+  preds <- predicts_sel %>%
+    filter(parm == pp)
+  ann <- annot %>%
+    filter(parm == pp)
+  
+  plt1 <- ggplot(dat, aes(x = year, y = value)) +
+    geom_jitter(aes(color = season_3), width = 0.3, height = 0, 
+                alpha = 0.1) +
+    geom_line(data = preds, 
+              mapping = aes(x = year, y = yvar, color = tvar),
+              size = 1) +
+    geom_text_npc(data = ann, 
+            mapping = aes(npcx = ann_xloc, npcy = ann_yloc, label = annot),
+            hjust = 'inward',
+            size = 3.25) +
+    
+    xlab('') +
+    ylab(labs[pp]) +
+    
+    scale_color_manual(values = cbep_colors2()[c(1,2,4)],
+                       name = '',
+                       guide = guide_legend(override.aes = list(alpha = 1))) +
+    
+    scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
+    
+    theme_cbep(base_size = 12) +
+    # theme(axis.text.x = element_text(angle = 90,
+    #                                  size = 8,
+    #                                  hjust = 1,
+    #                                  vjust = 0),
+    #       axis.ticks.length.x = unit(0, 'cm')) +
+    
+    theme(legend.position = 'bottom')
+  print(plt1)
+}
+```
+
+<img src="Surface_Trends_Graphics_files/figure-gfm/unnamed-chunk-7-1.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/unnamed-chunk-7-2.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/unnamed-chunk-7-3.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/unnamed-chunk-7-4.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/unnamed-chunk-7-5.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/unnamed-chunk-7-6.png" style="display: block; margin: auto;" />
