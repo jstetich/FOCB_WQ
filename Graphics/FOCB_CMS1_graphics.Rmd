@@ -49,6 +49,8 @@ library(GGally)
 #library(zoo)
 library(lubridate)  # here, for the make_datetime() function
 
+library(colorspace)
+
 library(CBEPgraphics)
 load_cbep_fonts()
 theme_set(theme_cbep())
@@ -535,7 +537,7 @@ cross_plot <- function(dat, x_parm, y_parm, color_parm = "Month",
 }
 ```
 
-### Function to Add Means by Color Groups
+### Function to Add Medians by Color Groups
 This function is intended principally to add summary points and lines to cross
 plots -- usually by month to emphasize seasonal patterns.
 ```{r, add_sum_fxn}
@@ -561,19 +563,21 @@ add_sum <- function(p, dat, x_parm, y_parm, color_parm = "Month",
                y     = dat[[y_parmname]],
                color = dat[[colorname]]) %>%
     group_by(color) %>%
-    summarize(x = mean(x, na.rm = TRUE),
-              y = mean(y, na.rm = TRUE)) %>%
+    summarize(x = median(x, na.rm = TRUE),
+              y = median(y, na.rm = TRUE)) %>%
     mutate(color = factor (color, levels = levels(color)))
   
-  add <- p + geom_point(data = df, mapping = aes(x = x, y = y, fill = color),
+  pp <- p
+  
+  if(with_line) {
+    pp <- pp + geom_path(data = df, mapping = aes(x = x, y = y), size = 1,
+              color = 'gray20')
+  } 
+  
+  add <- pp + geom_point(data = df, mapping = aes(x = x, y = y, fill = color),
                         shape = 22, size = 3) +
           scale_fill_viridis_d(name = color_label, option = 'viridis')
     
-  if(with_line) {
-    add <- add + geom_path(data = df, mapping = aes(x = x, y = y), size = 1,
-              color = 'gray20')
-  }
-
   return(add)
 }
 ```
@@ -600,8 +604,8 @@ plt +
   scale_y_continuous(trans = 'log1p')
 ```
 
-### Joint Plot
-#### Guide Function to Transform Chlorophyll Axis
+### Joint (Facetted) Plot
+#### Guide Functions to Transform Chlorophyll Axis
 ```{r, axis_fxns}
 prefered_breaks =  c(0, 1, 5, 10, 50, 100)
 
@@ -639,6 +643,12 @@ my_label_fxn <- function(brks) {
 }
 ``` 
 
+
+```{r}
+hcl_palettes("diverging", n = 7, plot = TRUE)
+```
+
+
 #### Plot
 ```{r,  facet_prof, fig.width = 7, fig.height = 5}
 facet.labs <-         c("Temperature (°C)", 'Salinity (PSU)', 'Dissolved Oxygen (mg/l)', 
@@ -650,13 +660,21 @@ long_data %>%
   filter(Parameter %in% c("temperature", 'salinity', 'do', 'chl_log1')) %>%
   mutate(Parameter = factor(Parameter, 
                             levels =  c("temperature", 'salinity', 'do', 'chl_log1'))) %>%
-  full_profile(parm = Value, dt = 'dt', color = 'hour', 
+  full_profile(parm = Value, dt = 'dt', color = 'hour', alpha = 1,
                label = '', color_label = 'Hour of the Day') +
   #geom_hline(data = href, mapping = aes(yintercept = val),
   #           lty = 'dotted', color = 'gray15') +
   
   
   scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
+   # scale_color_viridis_c(name = 'Time of Day',
+   #                       option = 'viridis', 
+   #                       breaks = c(0,3,6,9,12,15,18,21,24)) +
+  
+  scale_color_continuous_diverging(palette = 'Cork', 
+                                   mid = 12,
+                                   breaks = c(0,3,6, 9, 12,15,18, 21),
+                                   name = 'Hour of the Day') +
   
   facet_wrap(~ Parameter, nrow = 2, scales = 'free_y',
              labeller = labeller(Parameter = facet.labs) )

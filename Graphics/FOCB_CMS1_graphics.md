@@ -22,18 +22,18 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
         -   [Season Profile or
             Climatology](#season-profile-or-climatology)
         -   [Cross Plots](#cross-plots)
-        -   [Function to Add Means by Color
-            Groups](#function-to-add-means-by-color-groups)
+        -   [Function to Add Medians by Color
+            Groups](#function-to-add-medians-by-color-groups)
     -   [Values by Time](#values-by-time)
         -   [Chlorophyll A](#chlorophyll-a)
-        -   [Joint Plot](#joint-plot)
+        -   [Joint (Facetted) Plot](#joint-facetted-plot)
     -   [Seasonal Profiles](#seasonal-profiles)
         -   [Dissolved Oxygen](#dissolved-oxygen)
         -   [Percent Saturation](#percent-saturation)
         -   [Temperature](#temperature)
         -   [Salinity](#salinity)
         -   [Chlorophyll A](#chlorophyll-a-1)
-        -   [Joint Plot](#joint-plot-1)
+        -   [Joint Plot](#joint-plot)
     -   [Cross-Plots](#cross-plots-1)
         -   [Dissolved Oxygen and
             PCO<sub>2</sub>](#dissolved-oxygen-and-pco2)
@@ -93,6 +93,8 @@ library(lubridate)  # here, for the make_datetime() function
 #> The following objects are masked from 'package:base':
 #> 
 #>     date, intersect, setdiff, union
+
+library(colorspace)
 
 library(CBEPgraphics)
 load_cbep_fonts()
@@ -689,7 +691,7 @@ cross_plot <- function(dat, x_parm, y_parm, color_parm = "Month",
 }
 ```
 
-### Function to Add Means by Color Groups
+### Function to Add Medians by Color Groups
 
 This function is intended principally to add summary points and lines to
 cross plots – usually by month to emphasize seasonal patterns.
@@ -717,19 +719,21 @@ add_sum <- function(p, dat, x_parm, y_parm, color_parm = "Month",
                y     = dat[[y_parmname]],
                color = dat[[colorname]]) %>%
     group_by(color) %>%
-    summarize(x = mean(x, na.rm = TRUE),
-              y = mean(y, na.rm = TRUE)) %>%
+    summarize(x = median(x, na.rm = TRUE),
+              y = median(y, na.rm = TRUE)) %>%
     mutate(color = factor (color, levels = levels(color)))
   
-  add <- p + geom_point(data = df, mapping = aes(x = x, y = y, fill = color),
+  pp <- p
+  
+  if(with_line) {
+    pp <- pp + geom_path(data = df, mapping = aes(x = x, y = y), size = 1,
+              color = 'gray20')
+  } 
+  
+  add <- pp + geom_point(data = df, mapping = aes(x = x, y = y, fill = color),
                         shape = 22, size = 3) +
           scale_fill_viridis_d(name = color_label, option = 'viridis')
     
-  if(with_line) {
-    add <- add + geom_path(data = df, mapping = aes(x = x, y = y), size = 1,
-              color = 'gray20')
-  }
-
   return(add)
 }
 ```
@@ -763,9 +767,9 @@ plt +
 
 <img src="FOCB_CMS1_graphics_files/figure-gfm/plt_chl_log1_prof-1.png" style="display: block; margin: auto;" />
 
-### Joint Plot
+### Joint (Facetted) Plot
 
-#### Guide Function to Transform Chlorophyll Axis
+#### Guide Functions to Transform Chlorophyll Axis
 
 ``` r
 prefered_breaks =  c(0, 1, 5, 10, 50, 100)
@@ -804,6 +808,12 @@ my_label_fxn <- function(brks) {
 }
 ```
 
+``` r
+hcl_palettes("diverging", n = 7, plot = TRUE)
+```
+
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-1-1.png" style="display: block; margin: auto;" />
+
 #### Plot
 
 ``` r
@@ -816,16 +826,26 @@ long_data %>%
   filter(Parameter %in% c("temperature", 'salinity', 'do', 'chl_log1')) %>%
   mutate(Parameter = factor(Parameter, 
                             levels =  c("temperature", 'salinity', 'do', 'chl_log1'))) %>%
-  full_profile(parm = Value, dt = 'dt', color = 'hour', 
+  full_profile(parm = Value, dt = 'dt', color = 'hour', alpha = 1,
                label = '', color_label = 'Hour of the Day') +
   #geom_hline(data = href, mapping = aes(yintercept = val),
   #           lty = 'dotted', color = 'gray15') +
   
   
   scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
+   # scale_color_viridis_c(name = 'Time of Day',
+   #                       option = 'viridis', 
+   #                       breaks = c(0,3,6,9,12,15,18,21,24)) +
+  
+  scale_color_continuous_diverging(palette = 'Cork', 
+                                   mid = 12,
+                                   breaks = c(0,3,6, 9, 12,15,18, 21),
+                                   name = 'Hour of the Day') +
   
   facet_wrap(~ Parameter, nrow = 2, scales = 'free_y',
              labeller = labeller(Parameter = facet.labs) )
+#> Scale for 'colour' is already present. Adding another scale for 'colour',
+#> which will replace the existing scale.
 #> Warning: Removed 2745 rows containing missing values (geom_point).
 ```
 
