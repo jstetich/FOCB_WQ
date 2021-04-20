@@ -748,7 +748,7 @@ plt
 #> Warning: Removed 681 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-7-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/plt_chl_prof-1.png" style="display: block; margin: auto;" />
 
 #### Transformed Version
 
@@ -761,7 +761,7 @@ plt +
 #> Warning: Removed 681 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-8-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/plt_chl_log1_prof-1.png" style="display: block; margin: auto;" />
 
 ### Joint Plot
 
@@ -829,7 +829,7 @@ long_data %>%
 #> Warning: Removed 2745 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-10-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/facet_prof-1.png" style="display: block; margin: auto;" />
 
 ``` r
 
@@ -859,7 +859,7 @@ season_profile(the_data, do, alpha = 0.25,
 #> Warning: Removed 912 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-11-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/climatology_do-1.png" style="display: block; margin: auto;" />
 
 ### Percent Saturation
 
@@ -877,7 +877,7 @@ season_profile(the_data, pctsat, alpha = 0.25,
 #> Warning: Removed 912 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-12-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/climatology_pctsat-1.png" style="display: block; margin: auto;" />
 
 ### Temperature
 
@@ -891,7 +891,7 @@ season_profile(the_data, temperature, doy, alpha = 0.25,
 #> Warning: Removed 339 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-13-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/climatology_temp-1.png" style="display: block; margin: auto;" />
 
 ### Salinity
 
@@ -905,7 +905,7 @@ season_profile(the_data, salinity, doy, alpha = 0.25,
 #> Warning: Removed 813 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-14-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/climatology_salinity-1.png" style="display: block; margin: auto;" />
 
 ### Chlorophyll A
 
@@ -920,7 +920,7 @@ season_profile(the_data, chl_log1, doy, alpha = 0.5,
 #> Warning: Removed 681 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-15-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/climatology_chl-1.png" style="display: block; margin: auto;" />
 
 ### Joint Plot
 
@@ -949,7 +949,7 @@ long_data %>%
 #> Warning: Removed 2745 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-16-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/facet_climateology-1.png" style="display: block; margin: auto;" />
 
 ``` r
   
@@ -980,14 +980,11 @@ plt
 #> Warning: Removed 10896 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-17-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/cross_plot_do_co2-1.png" style="display: block; margin: auto;" />
 
-``` r
+``` rcross_plot_do_co2_sum
 add_sum (plt, the_data, do, pco2, with_line = TRUE)
-#> Warning: Removed 10896 rows containing missing values (geom_point).
 ```
-
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-18-1.png" style="display: block; margin: auto;" />
 
 ### Dissolved Oxygen and Temperature
 
@@ -1006,7 +1003,7 @@ add_sum (plt, the_data, temperature, do, with_line = TRUE) +
 #> Warning: Removed 912 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-19-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/cross_plot_do_t-1.png" style="display: block; margin: auto;" />
 
 ``` r
 ggsave('figures/cms_do_temp.pdf', device = cairo_pdf, 
@@ -1031,7 +1028,7 @@ add_sum (plt, daily_data, temperature_med, do_med, with_line = TRUE) +
 #> Warning: Removed 27 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-20-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/cross_plot_do_co2_daily-1.png" style="display: block; margin: auto;" />
 
 ### Dissolved Oxygen and Chlorophyll
 
@@ -1051,7 +1048,7 @@ plt <- cross_plot(the_data, do, chl_log1, color_parm = "Month",
 #> Warning: Removed 1004 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-21-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/cross_plot_do_chl-1.png" style="display: block; margin: auto;" />
 
 #### Compare Daily Data
 
@@ -1071,5 +1068,5 @@ add_sum(plt, daily_data, do_med, chl_log1_med, with_line = TRUE) +
 #> Warning: Removed 28 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-22-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/cross_plot_do_chl_daily-1.png" style="display: block; margin: auto;" />
 [Back to top](#)

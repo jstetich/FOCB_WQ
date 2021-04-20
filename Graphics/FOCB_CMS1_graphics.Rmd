@@ -13,7 +13,7 @@ output:
     src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
     style="position:absolute;top:10px;right:50px;" />
 
-```{r setup, include=FALSE}
+```{r, setup, include=FALSE}
 knitr::opts_chunk$set(fig.align = 'center',
                       fig.width = 5, fig.height = 4,
                       collapse = TRUE, comment = "#>")
@@ -40,7 +40,7 @@ Analyses in OTHER GitHub archived look into the following:
 
 
 # Load Libraries
-```{r load_libraries}
+```{r, load_libraries}
 library(tidyverse)
 library(readxl)
 #library(readr)
@@ -57,7 +57,7 @@ theme_set(theme_cbep())
 
 # Load Data
 ## Establish Folder Reference
-```{r folder_refs}
+```{r, folder_refs}
 sibfldnm <- 'Original_Data'
 parent   <- dirname(getwd())
 sibling  <- file.path(parent,sibfldnm)
@@ -84,7 +84,7 @@ to reconstruct the time from components.  I am not certain of the timezone
 setting to read these files in correctly.
 
 ### Primary Data
-```{r load_data, warning = FALSE}
+```{r, load_data, warning = FALSE}
 
 fn    <- 'CMS1 Data through 2019.xlsx'
 fpath <- file.path(sibling,fn)
@@ -108,7 +108,7 @@ savings time, etc.  The parameter `tz = "America/New_York"` creates a time stamp
 that is tied to local time.  The time stamp under the hood is a numerical value,
 but with this timezone specification, the text form  accounts for local
 daylight savings time.
-```{r create_timestamp}
+```{r, create_timestamp}
 the_data <- the_data %>%
   select(-count)  %>%       # datetime and time contain the same data
   mutate(dt = make_datetime(year, month, day, hour, 0, tz = "America/New_York")) %>%
@@ -128,15 +128,14 @@ analyses not of raw chlorophyll data, but analysis of log (Chlorophyll + 1)
 data.  The transformed values better correspond to assumptions of normality used
 is statistical analyses.  We provide a transformed version here so that we can
 produce graphics that are visually consistent in terms of presentation.
-```{r}
+```{r, transform_chl}
 the_data <- the_data %>%
   mutate(chl_log1 = log1p(chl)) %>%
   relocate(chl_log1, .after = chl)
 ```
 
-
 ## Create Long Form Data
-```{r long_data}
+```{r, long_data}
 long_data <- the_data %>%
   pivot_longer(cols= depth:omega_a, names_to='Parameter', values_to = 'Value') %>%
   mutate(Parameter = factor(Parameter,
@@ -156,7 +155,7 @@ long_data <- the_data %>%
 
 
 ## Create Daily Data Summaries
-```{r daily_data}
+```{r, daily_data}
 daily_data <- the_data %>%
   select(-hour, -year, -month, -day, -doy) %>%         # Will recalculate these 
   group_by(thedate) %>%
@@ -181,17 +180,17 @@ daily_data <- the_data %>%
 
 # Exploratory Graphics
 [Back to top](#)
-```{r pairs_plot_1, warning=FALSE}
+```{r, pairs_plot_1, warning=FALSE}
 the_data %>% 
   ggpairs(c(4,6,7), progress=FALSE)
 ```
 
-```{r pairs_plot_2, warning=FALSE}
+```{r, pairs_plot_2, warning=FALSE}
 the_data %>% 
   ggpairs(c(4,5, 8, 11), progress=FALSE)
 ```
 
-```{r pairs_plot_3, warning=FALSE}
+```{r, pairs_plot_3, warning=FALSE}
 the_data %>% 
   ggpairs(c(4, 5, 6, 9), progress=FALSE)
 ```
@@ -206,7 +205,7 @@ What jumps out:
 *  pH data is negatively correlated with pCO~2~ and temperature.  
    There is little data at low salinity, but most of it is also low chlorophyll.  
 
-```{r pairs_plot_4, warning=FALSE}
+```{r, pairs_plot_4, warning=FALSE}
 the_data %>% 
   ggpairs(c(4, 6, 8, 11), progress=FALSE)
 ```
@@ -216,7 +215,7 @@ the_data %>%
 *  Negative pH to PCO~2~ relationships are fairly robust.
 
 
-```{r pairs_plot_5, warning=FALSE, cache = TRUE}
+```{r, pairs_plot_5, warning=FALSE}
 the_data %>% ggpairs(c(8, 11:14), progress=FALSE)
 ```
 *  Total alkalinity and dissolved inorganic carbon are nearly measuring 
@@ -226,7 +225,7 @@ the_data %>% ggpairs(c(8, 11:14), progress=FALSE)
 
 # Summary Statistics
 [Back to top](#)
-```{r summary_stats}
+```{r, summary_stats}
 result <- long_data %>%
   group_by(Parameter) %>%
   summarize(Minimum = min(Value, na.rm=TRUE),
@@ -252,7 +251,7 @@ result <- long_data %>%
   relocate(parm)
 ```
 
-```{r}
+```{r, summary_stats_table}
 knitr::kable(result %>% select(-parm), 
              digits = c(1,1,2,1,3,2,2,2,2,2,2))
 write.csv(result, 'summarystats_FOCB.csv')
@@ -264,7 +263,7 @@ average, adjusted for year to year variation, imbalances in time of day data was
 collected, etc.  For that, we would need to estimate marginal means from a GAMM.
 We do not pursue that idea in this notebook.
 
-```{r monthly_stats}
+```{r, monthly_stats}
 monthly_tbl <- the_data %>%
   select(datetime, year, Month, temperature, salinity,
          do, pctsat, chl, chl_log1, ph, pco2, dic, ta, omega_a) %>%
@@ -311,7 +310,7 @@ chose not to, as the viridis palette is close enough to our colors while being
 slightly distinctive.
    
 ### Plot Versus Time
-```{r}
+```{r, profile_plot_fxn}
 full_profile <- function(dat, parm, dt = 'dt', color = 'temperature', 
                            label = NA, color_label = '',
                            guide = NA, h_adjust = 0.25,
@@ -393,7 +392,7 @@ full_profile <- function(dat, parm, dt = 'dt', color = 'temperature',
 ### Season Profile or Climatology
 This uses our standard `CBEP_colors()`, but reordered.  This corresponds to 
 ordering in the OA chapter
-```{r}
+```{r, season_plot_fxn}
 season_profile <- function(dat, parm, doy = 'doy', year = "year", 
                            label = NA, guide = NA, h_adjust = 0.05,
                            alpha = 0.25, size = 0.5,
@@ -466,7 +465,7 @@ season_profile <- function(dat, parm, doy = 'doy', year = "year",
 ```
 
 ### Cross Plots
-```{r}
+```{r, crossplot_function}
 cross_plot <- function(dat, x_parm, y_parm, color_parm = "Month",
                             x_label = NA, y_label = NA, color_label = '',
                             alpha = 0.25,
@@ -539,7 +538,7 @@ cross_plot <- function(dat, x_parm, y_parm, color_parm = "Month",
 ### Function to Add Means by Color Groups
 This function is intended principally to add summary points and lines to cross
 plots -- usually by month to emphasize seasonal patterns.
-```{r}
+```{r, add_sum_fxn}
 add_sum <- function(p, dat, x_parm, y_parm, color_parm = "Month", 
                     color_label = '', with_line = TRUE) {
   # These are ugly argument checks, since they don't provide nice error messages.
@@ -584,7 +583,7 @@ add_sum <- function(p, dat, x_parm, y_parm, color_parm = "Month",
 [Back to top](#)  
 
 ### Chlorophyll A
-```{r}
+```{r, plt_chl_prof}
 plt <- full_profile(the_data, chl, dt = 'dt', color = 'Month', 
              label = 'Chlorophyll A (mg/l)', 
              guide = quantile(the_data$chl, .9, na.rm = TRUE))
@@ -593,7 +592,7 @@ plt
 
 
 #### Transformed Version
-```{r}
+```{r, plt_chl_log1_prof}
 plt <- full_profile(the_data, chl_log1, dt = 'dt', color = 'Month', 
              label = 'Chlorophyll A (mg/l)', 
              guide = quantile(the_data$chl_log1, .9, na.rm = TRUE))
@@ -603,7 +602,7 @@ plt +
 
 ### Joint Plot
 #### Guide Function to Transform Chlorophyll Axis
-```{r}
+```{r, axis_fxns}
 prefered_breaks =  c(0, 1, 5, 10, 50, 100)
 
 my_breaks_fxn <- function(lims) {
@@ -641,7 +640,7 @@ my_label_fxn <- function(brks) {
 ``` 
 
 #### Plot
-```{r fig.width = 7, fig.height = 5}
+```{r,  facet_prof, fig.width = 7, fig.height = 5}
 facet.labs <-         c("Temperature (°C)", 'Salinity (PSU)', 'Dissolved Oxygen (mg/l)', 
                         'Chlorophyll A (mg/l)')
 names(facet.labs) <-  c("temperature", 'salinity', 'do', 'chl_log1')
@@ -678,7 +677,7 @@ could bias the results.
 ### Dissolved Oxygen
 Maine's Marine Water Quality standards are expressed in terms of percent 
 saturation, not absolute concentrations
-```{r}
+```{r, climatology_do}
 season_profile(the_data, do, alpha = 0.25,
                label = "Dissolved Oxygen (mg/l)", 
                add_smooth = TRUE)
@@ -688,7 +687,7 @@ season_profile(the_data, do, alpha = 0.25,
 Maine's Marine Water Quality standards are expressed in terms of percent 
 saturation.  Class SA and Class SB waters must achieve 85% saturation, while 
 class SC waters must achieve 70% saturation
-```{r}
+```{r, climatology_pctsat}
 season_profile(the_data, pctsat, alpha = 0.25,
                label = "Percent Saturation", 
                guide = 85,
@@ -697,7 +696,7 @@ season_profile(the_data, pctsat, alpha = 0.25,
 ```
 
 ### Temperature
-```{r}
+```{r, climatology_temp}
 season_profile(the_data, temperature, doy, alpha = 0.25,
                label = "Temperature (°C)",
                add_smooth = TRUE, 
@@ -706,7 +705,7 @@ season_profile(the_data, temperature, doy, alpha = 0.25,
 ```
 
 ### Salinity
-```{r}
+```{r, climatology_salinity}
 season_profile(the_data, salinity, doy, alpha = 0.25,
                label = "Salinity (PSU)",
                add_smooth = TRUE, 
@@ -715,7 +714,7 @@ season_profile(the_data, salinity, doy, alpha = 0.25,
 ```
 
 ### Chlorophyll A
-```{r}
+```{r, climatology_chl}
 season_profile(the_data, chl_log1, doy, alpha = 0.5,
                size = .5,
                label = "Chlorophyll A (mg/l)",
@@ -726,7 +725,7 @@ season_profile(the_data, chl_log1, doy, alpha = 0.5,
 ```
 
 ### Joint Plot
-```{r fig.width = 7, fig.height = 5}
+```{r, facet_climateology, fig.width = 7, fig.height = 5}
 facet.labs <-         c("Temperature (°C)", 'Salinity (PSU)', 'Dissolved Oxygen (mg/l)', 
                         'Chlorophyll A (mg/l)')
 names(facet.labs) <-  c("temperature", 'salinity', 'do', 'chl_log1')
@@ -758,7 +757,7 @@ long_data %>%
 [Back to top](#)  
 
 ### Dissolved Oxygen and PCO~2~
-```{r}
+```{r, cross_plot_do_co2}
 plt <- cross_plot(the_data, do, pco2, color_parm = "Month",
                             x_label = "Dissolved Oxygen (mg/l)", 
                             y_label = "pCO2 (uAtm)",
@@ -773,12 +772,12 @@ plt <- plt +
 plt
 ```
 
-```{r}
+```{rcross_plot_do_co2_sum}
 add_sum (plt, the_data, do, pco2, with_line = TRUE)
 ```
 
 ### Dissolved Oxygen and Temperature
-```{r, width = 5, height = 4}
+```{r, cross_plot_do_t, width = 5, height = 4}
 plt <- cross_plot(the_data, temperature, do, color_parm = "Month",
                             y_label = "Dissolved Oxygen (mg/l)", 
                             x_label = "Temperature (°C)",
@@ -796,7 +795,7 @@ ggsave('figures/cms_do_temp.pdf', device = cairo_pdf,
 ```
 
 #### Compare Daily Data
-```{r}
+```{r, cross_plot_do_co2_daily}
 plt <- cross_plot(daily_data, temperature_med, do_med, color_parm = "Month",
                             y_label = "Dissolved Oxygen (mg/l)", 
                             x_label = "Temperature (°C)",
@@ -811,7 +810,7 @@ add_sum (plt, daily_data, temperature_med, do_med, with_line = TRUE) +
 ```
 
 ### Dissolved Oxygen and Chlorophyll
-```{r}
+```{r, cross_plot_do_chl}
 plt <- cross_plot(the_data, do, chl_log1, color_parm = "Month",
                             x_label = "Dissolved Oxygen (mg/l)", 
                             y_label = "Chlorophyll A (mg/l)",
@@ -827,7 +826,7 @@ plt <- cross_plot(the_data, do, chl_log1, color_parm = "Month",
 ```
 
 #### Compare Daily Data
-```{r}
+```{r, cross_plot_do_chl_daily}
 plt <- cross_plot(daily_data, do_med, chl_log1_med, color_parm = "Month",
                             x_label = "Dissolved Oxygen (mg/l)", 
                             y_label = "Chlorophyll A (mg/l)",
