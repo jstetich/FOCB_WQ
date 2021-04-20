@@ -386,6 +386,11 @@ nested_data <- nested_data %>%
   mutate(slopes_compare = map(lmer_3_seas_2,  function(mod) emtrends(mod, 
                                                      pairwise ~ season_3, 
                                                      var = "year")$contrasts))
+names(nested_data$slopes) <- nested_data$parameter
+nested_data$slopes
+```
+
+```{r display slope comparisons}
 names(nested_data$slopes_compare) <- nested_data$parameter
 nested_data$slopes_compare
 ```

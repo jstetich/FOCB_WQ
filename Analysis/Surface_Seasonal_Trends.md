@@ -916,6 +916,82 @@ nested_data <- nested_data %>%
   mutate(slopes_compare = map(lmer_3_seas_2,  function(mod) emtrends(mod, 
                                                      pairwise ~ season_3, 
                                                      var = "year")$contrasts))
+names(nested_data$slopes) <- nested_data$parameter
+nested_data$slopes
+#> $secchi_2
+#>  season_3 year.trend      SE   df lower.CL upper.CL
+#>  Spring     -0.00417 0.00264 5152 -0.00934  0.00101
+#>  Summer     -0.00974 0.00171 5152 -0.01308 -0.00639
+#>  Fall       -0.01426 0.00225 5152 -0.01867 -0.00984
+#> 
+#> Results are averaged over the levels of: station 
+#> Confidence level used: 0.95 
+#> 
+#> $temperature
+#>  season_3 year.trend      SE   df lower.CL upper.CL
+#>  Spring       0.0778 0.01039 5622   0.0574   0.0981
+#>  Summer       0.0691 0.00677 5622   0.0559   0.0824
+#>  Fall         0.0957 0.00888 5622   0.0782   0.1131
+#> 
+#> Results are averaged over the levels of: station 
+#> Confidence level used: 0.95 
+#> 
+#> $salinity
+#>  season_3 year.trend     SE   df lower.CL upper.CL
+#>  Spring       0.0034 0.0155 5567  -0.0269   0.0337
+#>  Summer      -0.0311 0.0101 5567  -0.0508  -0.0114
+#>  Fall        -0.0131 0.0133 5567  -0.0391   0.0129
+#> 
+#> Results are averaged over the levels of: station 
+#> Confidence level used: 0.95 
+#> 
+#> $do
+#>  season_3 year.trend      SE   df lower.CL  upper.CL
+#>  Spring     -0.00653 0.00387 5504  -0.0141  0.001054
+#>  Summer     -0.00547 0.00250 5504  -0.0104 -0.000557
+#>  Fall       -0.00694 0.00328 5504  -0.0134 -0.000513
+#> 
+#> Results are averaged over the levels of: station 
+#> Confidence level used: 0.95 
+#> 
+#> $pctsat
+#>  season_3 year.trend     SE   df lower.CL upper.CL
+#>  Spring       0.1357 0.0437 5459   0.0501   0.2214
+#>  Summer       0.0319 0.0283 5459  -0.0235   0.0874
+#>  Fall         0.0982 0.0372 5459   0.0252   0.1711
+#> 
+#> Results are averaged over the levels of: station 
+#> Confidence level used: 0.95 
+#> 
+#> $pH
+#>  season_3 year.trend       SE   df lower.CL  upper.CL
+#>  Spring     0.003457 0.000989 5069  0.00152  0.005397
+#>  Summer    -0.002217 0.000629 5069 -0.00345 -0.000983
+#>  Fall      -0.000223 0.000840 5069 -0.00187  0.001424
+#> 
+#> Results are averaged over the levels of: station 
+#> Confidence level used: 0.95 
+#> 
+#> $chl
+#>  season_3 year.trend    SE  df lower.CL upper.CL
+#>  Spring      -1.0755 0.278 418   -1.621   -0.530
+#>  Summer      -0.5194 0.173 418   -0.860   -0.178
+#>  Fall        -0.0155 0.234 418   -0.476    0.445
+#> 
+#> Results are averaged over the levels of: station 
+#> Confidence level used: 0.95 
+#> 
+#> $log1_chl
+#>  season_3 year.trend      SE  df lower.CL upper.CL
+#>  Spring      -0.0518 0.01471 418 -0.08077 -0.02293
+#>  Summer      -0.0245 0.00919 418 -0.04261 -0.00648
+#>  Fall         0.0191 0.01241 418 -0.00531  0.04347
+#> 
+#> Results are averaged over the levels of: station 
+#> Confidence level used: 0.95
+```
+
+``` r
 names(nested_data$slopes_compare) <- nested_data$parameter
 nested_data$slopes_compare
 #> $secchi_2
@@ -1152,7 +1228,7 @@ row <- nested_data[nested_data$parameter == 'chl',]
     xlim(1993, 2020) +
     scale_y_continuous(trans = 'log1p', breaks = c(0,1,  5, 10, 50, 100, 200))
   print(plt)
-#> Warning: Removed 12 rows containing missing values (geom_point).
+#> Warning: Removed 14 rows containing missing values (geom_point).
 ```
 
 <img src="Surface_Seasonal_Trends_files/figure-gfm/fix_chl_plot-1.png" style="display: block; margin: auto;" />
