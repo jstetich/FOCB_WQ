@@ -562,6 +562,10 @@ p_jit +
             mapping = aes(npcx = ann_xloc, npcy = ann_yloc, label = annot),
             hjust = 'inward',
             size = 3.25)
+
+ggsave('figures/wq_trends_six_wide_no_symb.pdf',
+       device = cairo_pdf, width = 7, height = 7)
+
 ```
 
 
@@ -627,7 +631,7 @@ p_jit +
                 color = c('red3', 'grey', 'grey', 'grey', 'red3', 'green2'))
 
 
-ggsave('figures/wq_trends_six_long.pdf', device = cairo_pdf, width = 7, height = 7)
+ggsave('figures/wq_trends_six_long.pdf', device = cairo_pdf, width = 3.5, height = 9.5)
 ```
   
 ## Separate Graphics

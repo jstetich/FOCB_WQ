@@ -892,6 +892,11 @@ p_jit +
 
 <img src="Surface_Trends_Graphics_files/figure-gfm/jitter_wide_annot-1.png" style="display: block; margin: auto;" />
 
+``` r
+ggsave('figures/wq_trends_six_wide_no_symb.pdf',
+       device = cairo_pdf, width = 7, height = 7)
+```
+
 ### Add Symbols
 
 In the upper left, we want to offer symbols to signal improving or
@@ -976,7 +981,7 @@ p_jit +
 
 ``` r
 
-ggsave('figures/wq_trends_six_long.pdf', device = cairo_pdf, width = 7, height = 7)
+ggsave('figures/wq_trends_six_long.pdf', device = cairo_pdf, width = 3.5, height = 9.5)
 #> Warning: Removed 3 rows containing missing values (geom_text_npc).
 ```
 
