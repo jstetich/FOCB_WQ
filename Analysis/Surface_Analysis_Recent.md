@@ -12,22 +12,28 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
     -   [Add Station Names](#add-station-names)
     -   [Address Secchi Censored
         Values](#address-secchi-censored-values)
--   [Transform the Secchi and Chlorophyll A
-    Data](#transform-the-secchi-and-chlorophyll-a-data)
+    -   [Transform Secchi and Chlorophyll
+        Data](#transform-secchi-and-chlorophyll-data)
 -   [Recent Conditions](#recent-conditions)
     -   [Create Recent Data](#create-recent-data)
     -   [Summary Statistics](#summary-statistics)
     -   [Create Nested Tibble](#create-nested-tibble)
-    -   [Linear Models](#linear-models)
-        -   [Review Model Results](#review-model-results)
-        -   [Generate Predictions](#generate-predictions)
-    -   [Options for More Complex
-        Models](#options-for-more-complex-models)
-        -   [Hierarchical Models](#hierarchical-models)
-        -   [Time Series Considerations](#time-series-considerations)
-    -   [Hierarchical Models](#hierarchical-models-1)
+-   [Linear Models](#linear-models)
+    -   [Review Model Results](#review-model-results)
+        -   [ANOVA](#anova)
+        -   [Diagnostic Plots](#diagnostic-plots)
+-   [Options for More Complex Models](#options-for-more-complex-models)
+    -   [Exploratory Graphics](#exploratory-graphics)
+        -   [Create Long Form Data](#create-long-form-data)
+        -   [Month to Month Plot](#month-to-month-plot)
+    -   [Hierarchical Models](#hierarchical-models)
         -   [Review Model Results](#review-model-results-1)
-        -   [Generate Predictions](#generate-predictions-1)
+        -   [Refit the Chlorophyll Model](#refit-the-chlorophyll-model)
+        -   [ANOVAS](#anovas)
+-   [Associations with Temperature](#associations-with-temperature)
+    -   [Hierarchical Model](#hierarchical-model)
+    -   [Correlations of Station Medians with
+        Temperature](#correlations-of-station-medians-with-temperature)
 
 <img
     src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
@@ -50,7 +56,6 @@ historical record.
 # Load Libraries
 
 ``` r
-library(MASS)     # Here for the `boxcox()` function
 library(tidyverse)
 #> -- Attaching packages --------------------------------------- tidyverse 1.3.0 --
 #> v ggplot2 3.3.3     v purrr   0.3.4
@@ -60,9 +65,7 @@ library(tidyverse)
 #> -- Conflicts ------------------------------------------ tidyverse_conflicts() --
 #> x dplyr::filter() masks stats::filter()
 #> x dplyr::lag()    masks stats::lag()
-#> x dplyr::select() masks MASS::select()
 library(readxl)
-#library(readr)
 
 library(mgcv)     # For `gam()` and `gamm()` models
 #> Loading required package: nlme
@@ -72,36 +75,7 @@ library(mgcv)     # For `gam()` and `gamm()` models
 #> 
 #>     collapse
 #> This is mgcv 1.8-33. For overview type 'help("mgcv-package")'.
-#library(maxLik)
-library(lme4)    # For mixed effectws models
-#> Loading required package: Matrix
-#> 
-#> Attaching package: 'Matrix'
-#> The following objects are masked from 'package:tidyr':
-#> 
-#>     expand, pack, unpack
-#> 
-#> Attaching package: 'lme4'
-#> The following object is masked from 'package:nlme':
-#> 
-#>     lmList
-#library(nlme)   # probably only needed if we need to model autocorrelation
-
 library(emmeans)
-
-library(GGally)
-#> Registered S3 method overwritten by 'GGally':
-#>   method from   
-#>   +.gg   ggplot2
-#> 
-#> Attaching package: 'GGally'
-#> The following object is masked from 'package:emmeans':
-#> 
-#>     pigs
-#library(zoo)
-#library(lubridate)  # here, for the make_datetime() function
-
-#library(broom)
 
 library(CBEPgraphics)
 load_cbep_fonts()
@@ -219,7 +193,7 @@ the_data <- the_data %>%
 #> i Input `secchi_2` is `if_else(secchi == "BSV", water_depth, as.numeric(secchi))`.
 ```
 
-# Transform the Secchi and Chlorophyll A Data
+## Transform Secchi and Chlorophyll Data
 
 We create a log plus one transformed version of the Chlorophyll data
 here, to facilitate “parallel” construction of statistical models. That
@@ -264,13 +238,11 @@ recent_data <- the_data %>%
 
 ## Summary Statistics
 
-We need an exported data table for GIS, containing useful summary
-statistics, especially medians and means. We should probably be mapping
-median values, as they are less affected by our heavy-tailed
-distributions.
-
-We need a table of means and medians, with sites on rows and parameters
-on columns.
+We want an exported data table for GIS, containing useful summary
+statistics, especially medians and means. We will probably map median
+values, as they are less affected by the heavy-tailed distributions. We
+also use a portion of these data later to test which station median
+characteristics are correlated with median temperature.
 
 ``` r
 sum_data <- recent_data %>%
@@ -294,9 +266,9 @@ write_csv(sum_data, fpath, na = '')
 
 ## Create Nested Tibble
 
-To run parallel analyses on nested tibbles, we will need to reorganize
-the data so that we can analyze along parameters. We add a list of
-labels and measurement units to simplify later labeling of plots.
+To run parallel analyses, we reorganize the data into a nested tibble.
+We also add a list of labels and measurement units to simplify labeling
+of plots.
 
 ``` r
 units <- tibble(parameter = c('secchi_2', 'sqrt_secchi', 'temperature', 
@@ -324,16 +296,16 @@ nested_data <- recent_data %>%
   left_join(units, by = 'parameter')
 ```
 
-## Linear Models
+# Linear Models
 
 ``` r
 nested_data <- nested_data %>%
   mutate(lms = map(data, function(df) lm(value ~ station, data = df)))
 ```
 
-### Review Model Results
+## Review Model Results
 
-#### ANOVA
+### ANOVA
 
 ``` r
 for (p in nested_data$parameter) {
@@ -454,9 +426,7 @@ for (p in nested_data$parameter) {
 
 As suspected, all parameters differ among sites somewhere.
 
-#### Diagnostic Plots
-
-While we are at it, lets look at model diagnostics
+### Diagnostic Plots
 
 ``` r
 for (p in nested_data$parameter) {
@@ -478,92 +448,29 @@ scale-location relationships.
 \* pH is heavy tailed and higher error at lower predicted pH (sites). \*
 chlorophyll has a couple of outliers with moderate leverage. It’s
 probably heavy-tailed too. We see the best model there is on the log
-plus one transformed chlorophyll data
+plus one transformed chlorophyll data.
 
-Chlorophyll is problematic pH and percent saturation also have a couple
-of outliers, and the heavy skew for salinity would be problematic if we
-were planning to analyze that by normal theory.
+# Options for More Complex Models
 
-### Generate Predictions
+We could in principal adjust models for different sampling histories
+(years and months) but there is likely little value to doing so as the
+sampling histories are fairly uniform, with the exception of a few sites
+added recently.
 
-We had problems doing this inside the nested tibble, because we don’t
-have chlorophyll data for all parameters from all stations. In
-particular, the site “KVL84” has no chlorophyll data. That required us
-to create a function that explicitly created different prediction sets,
-and saved them with the predictions.
+More seriously, these are time series. The measurements are not strictly
+periodic, and the interval between successive observations is large.
+Autocorrelation in the raw data is likely substantial because of
+seasonal patterns, but observations collected three weeks or a month
+apart are unlikely to be mechanistically correlated, once we take into
+account station, season, and year.
 
-Since we had to write a function anyway, we convert the predictions to a
-tibble, and add naive (normal distribution) 95% confidence intervals.
+We should consider interannual and month to month (day of year?)
+variability, and whether there is any advantage to modeling those
+variations.
 
-#### Prediction Function
+## Exploratory Graphics
 
-``` r
-extract_predicts <- function (parm, df = nested_data) {
-  # Pull the information for the selected parameter
-  sel <- df %>%
-    filter(parameter == parm)
-  
-  #Pull the related data from the nested tibble
-  dat <- sel$data[[1]]
-  test <- ! is.na(dat$value)
-  dat <- dat[test,]
-  
-  # assemble the (possibly reduced) station list as a dataframe
-  # Select the Site factor.  Note this comes with it's levels.
-  slist <- tibble(station = factor(unique(dat$station),
-                                   levels = levels(dat$station)))
-  
-  # Pull the model
-  mod <- sel$lms[[1]]
-
-  preds <- predict(mod, newdata = slist, se = TRUE) %>%
-    as_tibble %>%
-    mutate(station = slist$station) %>%
-    mutate(sd = sd(dat$value)) %>%
-    select(-df, -residual.scale) %>%
-    mutate(lower.sd = fit - sd,
-           upper.sd = fit + sd,
-           lower.ci = fit - 1.96 * se.fit,
-           upper.ci = fit + 1.96* se.fit)
-  
-  
-  # add in a full suite of stations, so we have NAs where we have no
-  # predictions.
-  all_stations <- tibble(station = factor(levels(dat$station),
-                                          levels = levels(dat$station)),
-                         station_name =  factor(levels(dat$station_name),
-                                                levels = levels(dat$station_name)))
-
- preds <- all_stations %>%
-   left_join(preds, by = 'station')
-  
-  return(preds)
-}
-```
-
-#### Add Predictions to the Nested Tibble
-
-``` r
-nested_data <- nested_data %>%
-  mutate(lm_predicts= map(parameter, extract_predicts))
-```
-
-## Options for More Complex Models
-
-### Hierarchical Models
-
-We could in principal also adjust models for different sampling
-histories (years and months) but there is likely little value to doing
-so as the sampling histories are fairly uniform.
-
-### Time Series Considerations
-
-More seriously, these are time series. The periodicity of measurement is
-wide, and data are incomplete, but we should consider interannual and
-month to month variability, and whether there is any advantage to
-modeling those variations.
-
-#### Create Long Form Data
+### Create Long Form Data
 
 We create long-form data to facilitate faceted graphics.
 
@@ -572,67 +479,48 @@ long_data <- recent_data %>%
   select(-time, -sample_depth, 
          -secchi, - bottom_flag) %>%
   relocate(water_depth, .after = month) %>%
-  pivot_longer(c(secchi_2:chl), names_to = 'parameter', values_to = 'value') %>%
+  pivot_longer(c(secchi_2:log1_chl), names_to = 'parameter', values_to = 'value') %>%
   filter(! is.na(value))
 ```
 
-#### Year to Year Plot
-
-``` r
-for (p in unique(long_data$parameter)) {
-  plt <- long_data %>%
-    filter(parameter == p) %>%
-    ggplot(aes(x = year, y = value)) +
-    geom_point(aes(color = month)) +
-    ylab(p) +
-    facet_wrap(~station) +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 90))
-  print(plt)
-}
-```
-
-<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-1.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-2.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-3.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-4.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-5.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-6.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-7.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-8.png" style="display: block; margin: auto;" />
-
-Note that ‘HR4’ only has data in 2015 and 2019.
-
-It is not obvious that there are strong year to year consistent
-variation.
-
-#### Month to Month Plot
+### Month to Month Plot
 
 ``` r
 for (p in unique(long_data$parameter)) {
   plt <- long_data %>%
     filter(parameter == p) %>%
     ggplot(aes(x = month, y = value)) +
-    geom_point(aes(color = year)) +
+    geom_jitter(aes(color = year), alpha = 0.5, width = 0.2, height = 0) +
     ylab(p) +
     facet_wrap(~station) +
-    theme_minimal() +
+    theme_cbep() +
     theme(axis.text.x = element_text(angle = 90))
   print(plt)
 }
 ```
 
-<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-17-1.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-17-2.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-17-3.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-17-4.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-17-5.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-17-6.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-17-7.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-17-8.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-14-1.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-14-2.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-14-3.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-14-4.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-14-5.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-14-6.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-14-7.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-14-8.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-14-9.png" style="display: block; margin: auto;" /><img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-14-10.png" style="display: block; margin: auto;" />
 
 Note the relatively limited data for Chlorophyll.
 
-Several Parameters show marked seasonal patterns. A few sites on a few
-other parameters may show seasonal or year to year variation, but
+Several parameters show marked seasonal patterns. Year to year changes
+are harder to discern. A few individual sites may show seasonal or year
+to year variation even where that is not important across all sites, but
 fitting that variation would be pushing our luck, as we are implicitly
 reviewing a large number of parameters over a large number of sites,
-thus triggering an effective multiple comparisons problem.
+thus triggering a multiple comparisons problem.
 
 We may be able to use the month by month relations to slightly reduce
-standard errors in our models. They probably have little value in the
-context of recent parameter estimation, but they may have significant
-value in identifying long-term trends.
+standard errors in our models. Such models probably have little value
+for parameter estimation here, but they may have significant value in
+identifying long-term trends.
 
 ## Hierarchical Models
 
-We fit a year to year random factor and seasonal (monthly) terms.
+We fit a year to year random factor and seasonal (monthly) terms. This
+reflects our belief that each year sets up somewhat differently due to
+weather, especially in the spring, but that some seasonal patterns
+shuold be robust, and of potential direct interest to us.
 
 ``` r
 nested_data <- nested_data %>%
@@ -655,7 +543,7 @@ for (p in nested_data$parameter) {
 }
 ```
 
-<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-19-1.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-1.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -670,7 +558,7 @@ for (p in nested_data$parameter) {
     #>             k'  edf k-index p-value
     #> s(year_f) 5.00 3.27      NA      NA
 
-<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-19-2.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-2.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -685,7 +573,7 @@ for (p in nested_data$parameter) {
     #>             k'  edf k-index p-value
     #> s(year_f) 5.00 3.09      NA      NA
 
-<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-19-3.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-3.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -700,7 +588,7 @@ for (p in nested_data$parameter) {
     #>             k'  edf k-index p-value
     #> s(year_f) 5.00 3.69      NA      NA
 
-<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-19-4.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-4.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -715,7 +603,7 @@ for (p in nested_data$parameter) {
     #>             k'  edf k-index p-value
     #> s(year_f) 5.00 3.79      NA      NA
 
-<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-19-5.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-5.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -730,7 +618,7 @@ for (p in nested_data$parameter) {
     #>             k'  edf k-index p-value
     #> s(year_f) 5.00 3.85      NA      NA
 
-<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-19-6.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-6.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -745,7 +633,7 @@ for (p in nested_data$parameter) {
     #>             k'  edf k-index p-value
     #> s(year_f) 5.00 3.62      NA      NA
 
-<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-19-7.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-7.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -760,7 +648,7 @@ for (p in nested_data$parameter) {
     #>            k' edf k-index p-value
     #> s(year_f) 5.0 3.5      NA      NA
 
-<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-19-8.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-8.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -775,7 +663,7 @@ for (p in nested_data$parameter) {
     #>             k'  edf k-index p-value
     #> s(year_f) 5.00 1.62      NA      NA
 
-<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-19-9.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-9.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -790,7 +678,7 @@ for (p in nested_data$parameter) {
     #>             k'  edf k-index p-value
     #> s(year_f) 5.00 2.61      NA      NA
 
-<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-19-10.png" style="display: block; margin: auto;" />
+<img src="Surface_Analysis_Recent_files/figure-gfm/unnamed-chunk-16-10.png" style="display: block; margin: auto;" />
 
     #> 
     #> Method: GCV   Optimizer: magic
@@ -814,7 +702,7 @@ but the difference is small, and it complicates interpretation later.
 Log 1 Chlorophyll is better than either untransformed chlorophyll or log
 of chlorophyll.
 
-#### Refit the CHlorophyll Model
+### Refit the Chlorophyll Model
 
 We want the transformation in the model object, so we can use the tools
 in `emmeans` to extract marginal means. We refit the chlorophyll model,
@@ -837,7 +725,7 @@ nested_data <- nested_data %>%
   filter(! parameter %in% c('log_chl', 'log1_chl', 'sqrt_secchi'))
 ```
 
-#### ANOVAS
+### ANOVAS
 
 ``` r
 for (p in nested_data$parameter) {
@@ -971,57 +859,371 @@ interaction terms, (although they are likely to be important for some
 parameters).
 
 None of that is likely to come as a surprise. Much of the value here is
-to confirm our intuition that that is the case, and provide mechanism
-for
+to confirm our intuition.
 
-Again, despite high levels of statistical significance for these models,
-the models are not terribly appropriate for either salinity or pH data.
+Despite high levels of statistical significance for these models, the
+models are not terribly appropriate for either salinity or pH data
+because of residuals far from normally distributed
 
-### Generate Predictions
+# Associations with Temperature
 
-#### Prediction Function
+We emphasize in the text and presentation that temperature acts as an
+important surrogate for the relative influence of offshore waters on
+local conditions in the Bay. If that is the case, we should be able to
+see high correlation with Temperature for the other parameters,
+especially after accounting for other known covariates.
+
+We take three approaches to check for the importance of temperature as a
+predictor of other water quality parameters:
+
+1.  We examine whether temperature is a significant predictor of other
+    parameters in linear models where we treat station and year as
+    random factors
+
+2.  
+
+We need to regenerate the long-form data, retaining temperature asa
+predictor variable, not breaking it into a separate dataframe.
+
+We create long-form data to facilitate faceted graphics.
 
 ``` r
-extract_emms <- function (parm, df = nested_data) {
-  # Pull the information for the selected parameter
-  sel <- df %>%
+ nested_data_2 <- recent_data %>%
+  select(-dt, -time, -sample_depth, 
+         -secchi, - bottom_flag) %>%
+  mutate(year_f = factor(year)) %>%
+  relocate(water_depth, temperature, .after = month) %>%
+  pivot_longer(c(secchi_2:log1_chl), names_to = 'parameter', values_to = 'value') %>%
+  filter(! is.na(value)) %>%
+  group_by(parameter) %>%
+  nest() %>%
+  left_join(units, by = 'parameter')
+ 
+```
+
+## Hierarchical Model
+
+``` r
+nested_data_2 <- nested_data_2 %>%
+  mutate(lmers_temp = map(data, function(df) gam(value ~  temperature +
+                                              s(year_f, bs = 're') +
+                                              s(station, bs = 're'), 
+                                            data = df)))
+```
+
+``` r
+for (parm in nested_data_2$parameter) {
+  row = nested_data_2 %>%
     filter(parameter == parm)
-  
-  #Pull the related data from the nested tibble
-  dat <- sel$data[[1]]
-  test <- ! is.na(dat$value)
-  dat <- dat[test,]
-  
-  # Pull the model
-  mod <- sel$lmers[[1]]
-
-  # This time, we want station marginal means, averaged across years and months
-  # `emmeans()` pulls values direct from the model object, so we do not need to
-  # provide a Station List, although we will still need to expand the 
-  # list of stations
-  
-  preds <- emmeans(mod, 'station', type = 'response') %>%
-    summary()
-  
-  # add in a full suite of stations, so we have NAs where we have no
-  # predictions.
-  all_stations <- tibble(station = factor(levels(dat$station),
-                                          levels = levels(dat$station)),
-                         station_name =  factor(levels(dat$station_name),
-                                                levels = levels(dat$station_name)))
-
- preds <- all_stations %>%
-   left_join(preds, by = 'station')
-  
-  return(preds)
-}
+  cat('\n\n')
+  cat(parm)
+  print(anova(row$lmers_temp[[1]]))
+  }
+#> 
+#> 
+#> secchi_2
+#> Family: gaussian 
+#> Link function: identity 
+#> 
+#> Formula:
+#> value ~ temperature + s(year_f, bs = "re") + s(station, bs = "re")
+#> 
+#> Parametric Terms:
+#>             df     F  p-value
+#> temperature  1 50.83 1.86e-12
+#> 
+#> Approximate significance of smooth terms:
+#>              edf Ref.df     F p-value
+#> s(year_f)   3.38   4.00 12.39 0.00742
+#> s(station) 21.46  22.00 60.82 < 2e-16
+#> 
+#> 
+#> sqrt_secchi
+#> Family: gaussian 
+#> Link function: identity 
+#> 
+#> Formula:
+#> value ~ temperature + s(year_f, bs = "re") + s(station, bs = "re")
+#> 
+#> Parametric Terms:
+#>             df     F  p-value
+#> temperature  1 45.89 2.07e-11
+#> 
+#> Approximate significance of smooth terms:
+#>               edf Ref.df     F p-value
+#> s(year_f)   3.245  4.000 11.00 0.00958
+#> s(station) 21.472 22.000 62.04 < 2e-16
+#> 
+#> 
+#> salinity
+#> Family: gaussian 
+#> Link function: identity 
+#> 
+#> Formula:
+#> value ~ temperature + s(year_f, bs = "re") + s(station, bs = "re")
+#> 
+#> Parametric Terms:
+#>             df     F p-value
+#> temperature  1 92.78  <2e-16
+#> 
+#> Approximate significance of smooth terms:
+#>              edf Ref.df     F p-value
+#> s(year_f)   3.67   4.00 217.9  <2e-16
+#> s(station) 21.90  22.00 312.2  <2e-16
+#> 
+#> 
+#> do
+#> Family: gaussian 
+#> Link function: identity 
+#> 
+#> Formula:
+#> value ~ temperature + s(year_f, bs = "re") + s(station, bs = "re")
+#> 
+#> Parametric Terms:
+#>             df     F p-value
+#> temperature  1 819.2  <2e-16
+#> 
+#> Approximate significance of smooth terms:
+#>               edf Ref.df     F p-value
+#> s(year_f)   3.681  4.000 23.48  <2e-16
+#> s(station) 20.526 22.000 18.09  <2e-16
+#> 
+#> 
+#> pctsat
+#> Family: gaussian 
+#> Link function: identity 
+#> 
+#> Formula:
+#> value ~ temperature + s(year_f, bs = "re") + s(station, bs = "re")
+#> 
+#> Parametric Terms:
+#>             df     F p-value
+#> temperature  1 5.682  0.0173
+#> 
+#> Approximate significance of smooth terms:
+#>               edf Ref.df     F p-value
+#> s(year_f)   3.612  4.000 21.10  <2e-16
+#> s(station) 20.683 22.000 19.86  <2e-16
+#> 
+#> 
+#> pH
+#> Family: gaussian 
+#> Link function: identity 
+#> 
+#> Formula:
+#> value ~ temperature + s(year_f, bs = "re") + s(station, bs = "re")
+#> 
+#> Parametric Terms:
+#>             df     F  p-value
+#> temperature  1 43.74 5.99e-11
+#> 
+#> Approximate significance of smooth terms:
+#>               edf Ref.df     F  p-value
+#> s(year_f)   3.495  4.000 17.70 1.18e-06
+#> s(station) 20.626 22.000 24.12  < 2e-16
+#> 
+#> 
+#> chl
+#> Family: gaussian 
+#> Link function: identity 
+#> 
+#> Formula:
+#> value ~ temperature + s(year_f, bs = "re") + s(station, bs = "re")
+#> 
+#> Parametric Terms:
+#>             df     F  p-value
+#> temperature  1 23.01 2.29e-06
+#> 
+#> Approximate significance of smooth terms:
+#>               edf Ref.df     F  p-value
+#> s(year_f)   1.818  4.000 2.071  0.00764
+#> s(station) 14.144 21.000 1.893 8.32e-05
+#> 
+#> 
+#> log_chl
+#> Family: gaussian 
+#> Link function: identity 
+#> 
+#> Formula:
+#> value ~ temperature + s(year_f, bs = "re") + s(station, bs = "re")
+#> 
+#> Parametric Terms:
+#>             df     F  p-value
+#> temperature  1 58.42 1.64e-13
+#> 
+#> Approximate significance of smooth terms:
+#>               edf Ref.df     F  p-value
+#> s(year_f)   2.449  4.000 2.875 0.007197
+#> s(station) 13.495 21.000 1.732 0.000239
+#> 
+#> 
+#> log1_chl
+#> Family: gaussian 
+#> Link function: identity 
+#> 
+#> Formula:
+#> value ~ temperature + s(year_f, bs = "re") + s(station, bs = "re")
+#> 
+#> Parametric Terms:
+#>             df     F  p-value
+#> temperature  1 66.48 4.79e-15
+#> 
+#> Approximate significance of smooth terms:
+#>               edf Ref.df    F  p-value
+#> s(year_f)   2.613  4.000 3.65  0.00483
+#> s(station) 15.090 21.000 2.45 6.35e-06
 ```
 
-#### Add Predictions to the Nested Tibble
+So all parameters show significant correlations with temperature,
+treating Years and Stations as random factors.
+
+But that’s not exactly the question we want to ask. We want to ask if
+stations are structured by temperature, not if temperature correlates
+with other parameters within (random) stations and years.
+
+## Correlations of Station Medians with Temperature
+
+We use Kendall’s Tau as a robust / resistant alternative to Pearson
+Correlation Coefficient. A Spearman rank correlation would also be
+appropriate.
 
 ``` r
-nested_data <- nested_data %>%
-  mutate(lmer_predicts= map(parameter, extract_emms))
+tmp <- sum_data %>%
+  select(station, contains('_med')) %>%
+  rename_all(~sub('_med', '', .)) %>%
+  relocate(temperature, .after = station)
+  
+for (parm in names(tmp)[3:11]) {
+  cat('\n\n')
+  cat(parm, '\n')
+  print(cor.test(tmp$temperature, tmp[[parm]], method = "kendall"))
+}
+#> 
+#> 
+#> secchi_2
+#> Warning in cor.test.default(tmp$temperature, tmp[[parm]], method = "kendall"):
+#> Cannot compute exact p-value with ties
+#> 
+#>  Kendall's rank correlation tau
+#> 
+#> data:  tmp$temperature and tmp[[parm]]
+#> z = -2.968, p-value = 0.002998
+#> alternative hypothesis: true tau is not equal to 0
+#> sample estimates:
+#>        tau 
+#> -0.4507781 
+#> 
+#> 
+#> 
+#> sqrt_secchi
+#> Warning in cor.test.default(tmp$temperature, tmp[[parm]], method = "kendall"):
+#> Cannot compute exact p-value with ties
+#> 
+#>  Kendall's rank correlation tau
+#> 
+#> data:  tmp$temperature and tmp[[parm]]
+#> z = -2.9652, p-value = 0.003025
+#> alternative hypothesis: true tau is not equal to 0
+#> sample estimates:
+#>       tau 
+#> -0.448942 
+#> 
+#> 
+#> 
+#> salinity 
+#> 
+#>  Kendall's rank correlation tau
+#> 
+#> data:  tmp$temperature and tmp[[parm]]
+#> T = 102, p-value = 0.2074
+#> alternative hypothesis: true tau is not equal to 0
+#> sample estimates:
+#>        tau 
+#> -0.1936759 
+#> 
+#> 
+#> 
+#> do 
+#> 
+#>  Kendall's rank correlation tau
+#> 
+#> data:  tmp$temperature and tmp[[parm]]
+#> T = 62, p-value = 0.0004437
+#> alternative hypothesis: true tau is not equal to 0
+#> sample estimates:
+#>        tau 
+#> -0.5098814 
+#> 
+#> 
+#> 
+#> pctsat 
+#> 
+#>  Kendall's rank correlation tau
+#> 
+#> data:  tmp$temperature and tmp[[parm]]
+#> T = 78, p-value = 0.01008
+#> alternative hypothesis: true tau is not equal to 0
+#> sample estimates:
+#>        tau 
+#> -0.3833992 
+#> 
+#> 
+#> 
+#> pH
+#> Warning in cor.test.default(tmp$temperature, tmp[[parm]], method = "kendall"):
+#> Cannot compute exact p-value with ties
+#> 
+#>  Kendall's rank correlation tau
+#> 
+#> data:  tmp$temperature and tmp[[parm]]
+#> z = -2.7586, p-value = 0.005805
+#> alternative hypothesis: true tau is not equal to 0
+#> sample estimates:
+#>        tau 
+#> -0.4185797 
+#> 
+#> 
+#> 
+#> chl 
+#> 
+#>  Kendall's rank correlation tau
+#> 
+#> data:  tmp$temperature and tmp[[parm]]
+#> T = 173, p-value = 0.0008745
+#> alternative hypothesis: true tau is not equal to 0
+#> sample estimates:
+#>       tau 
+#> 0.4978355 
+#> 
+#> 
+#> 
+#> log_chl 
+#> 
+#>  Kendall's rank correlation tau
+#> 
+#> data:  tmp$temperature and tmp[[parm]]
+#> T = 170, p-value = 0.001713
+#> alternative hypothesis: true tau is not equal to 0
+#> sample estimates:
+#>       tau 
+#> 0.4718615 
+#> 
+#> 
+#> 
+#> log1_chl 
+#> 
+#>  Kendall's rank correlation tau
+#> 
+#> data:  tmp$temperature and tmp[[parm]]
+#> T = 173, p-value = 0.0008745
+#> alternative hypothesis: true tau is not equal to 0
+#> sample estimates:
+#>       tau 
+#> 0.4978355
 ```
 
-#### Prediction Plots
+-   Warmer waters have:
+    -   Lower water clarity  
+    -   Lower dissolved oxygen and percent saturation  
+    -   Lower pH  
+    -   Higher chlorophyll

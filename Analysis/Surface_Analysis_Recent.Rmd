@@ -32,23 +32,11 @@ data provides consistent sampling history with the deepest historical record.
 
 # Load Libraries
 ```{r load_libraries}
-library(MASS)     # Here for the `boxcox()` function
 library(tidyverse)
 library(readxl)
-#library(readr)
 
 library(mgcv)     # For `gam()` and `gamm()` models
-#library(maxLik)
-library(lme4)    # For mixed effectws models
-#library(nlme)   # probably only needed if we need to model autocorrelation
-
 library(emmeans)
-
-library(GGally)
-#library(zoo)
-#library(lubridate)  # here, for the make_datetime() function
-
-#library(broom)
 
 library(CBEPgraphics)
 load_cbep_fonts()
@@ -141,7 +129,7 @@ the_data <- the_data %>%
 ```
 
 
-# Transform the Secchi and Chlorophyll A Data
+## Transform Secchi and Chlorophyll Data
 We create a log plus one transformed version of the Chlorophyll data here, to
 facilitate "parallel" construction of statistical models.  That transform 
 regularizes variances and linearizes response fairly well. We also develop a 
@@ -177,12 +165,11 @@ recent_data <- the_data %>%
 ```
 
 ## Summary Statistics
-We need an exported data table for GIS, containing useful summary statistics,
-especially medians and means.  We should probably be mapping median values, as
-they are less affected by our heavy-tailed distributions.
-
-We need a table of means and medians, with sites on rows and parameters on
-columns.
+We want an exported data table for GIS, containing useful summary statistics,
+especially medians and means.  We will probably map median values, as
+they are less affected by the heavy-tailed distributions.  We also use a
+portion of these data later to test which station median characteristics are 
+correlated with median temperature.
 ```{r}
 sum_data <- recent_data %>%
   select(-dt, -year, -time, -sample_depth, 
@@ -203,11 +190,9 @@ fpath =
 write_csv(sum_data, fpath, na = '')
 ```
 
-
 ## Create Nested Tibble
-To run parallel analyses on nested tibbles, we will need to reorganize the 
-data so that we can analyze along parameters.  We add a list of labels and
-measurement units to simplify later labeling of plots.
+To run parallel analyses, we  reorganize the data into a  nested tibble.  We 
+also add a list of labels and measurement units to simplify labeling of plots.
 ```{r}
 units <- tibble(parameter = c('secchi_2', 'sqrt_secchi', 'temperature', 
                               'salinity', 'do',
@@ -234,14 +219,14 @@ nested_data <- recent_data %>%
   left_join(units, by = 'parameter')
 ```
 
-## Linear Models
+# Linear Models
 ```{r}
 nested_data <- nested_data %>%
   mutate(lms = map(data, function(df) lm(value ~ station, data = df)))
 ```
 
-### Review Model Results
-#### ANOVA
+## Review Model Results
+### ANOVA
 ```{r}
 for (p in nested_data$parameter) {
   cat(p)
@@ -252,8 +237,7 @@ for (p in nested_data$parameter) {
 ```
 As suspected, all parameters differ among sites somewhere.
 
-#### Diagnostic Plots
-While we are at it, lets look at model diagnostics
+### Diagnostic Plots
 ```{r}
 for (p in nested_data$parameter) {
   plot(nested_data$lms[nested_data$parameter == p][[1]],
@@ -272,124 +256,46 @@ So....
 *  pH is heavy tailed and higher error at lower predicted pH (sites).
 *  chlorophyll has a couple of outliers with moderate leverage.  It's probably 
    heavy-tailed too.  We see the best model there is on the log plus one 
-   transformed chlorophyll data
-   
-Chlorophyll is problematic pH and percent saturation also have a couple of 
-outliers, and the heavy skew for salinity would be problematic if we were 
-planning to analyze that by normal theory.
+   transformed chlorophyll data.
 
-### Generate Predictions
-We had problems doing this inside the nested tibble, because we don't
-have chlorophyll data for all parameters from all stations. In particular, the
-site "KVL84" has no chlorophyll data. That required us to create a function
-that explicitly created different prediction sets, and saved them with the 
-predictions.
-
-Since we had to write a function anyway, we convert the predictions to a
-tibble, and add naive (normal distribution) 95% confidence intervals.
-
-#### Prediction Function
-```{r}
-extract_predicts <- function (parm, df = nested_data) {
-  # Pull the information for the selected parameter
-  sel <- df %>%
-    filter(parameter == parm)
-  
-  #Pull the related data from the nested tibble
-  dat <- sel$data[[1]]
-  test <- ! is.na(dat$value)
-  dat <- dat[test,]
-  
-  # assemble the (possibly reduced) station list as a dataframe
-  # Select the Site factor.  Note this comes with it's levels.
-  slist <- tibble(station = factor(unique(dat$station),
-                                   levels = levels(dat$station)))
-  
-  # Pull the model
-  mod <- sel$lms[[1]]
-
-  preds <- predict(mod, newdata = slist, se = TRUE) %>%
-    as_tibble %>%
-    mutate(station = slist$station) %>%
-    mutate(sd = sd(dat$value)) %>%
-    select(-df, -residual.scale) %>%
-    mutate(lower.sd = fit - sd,
-           upper.sd = fit + sd,
-           lower.ci = fit - 1.96 * se.fit,
-           upper.ci = fit + 1.96* se.fit)
-  
-  
-  # add in a full suite of stations, so we have NAs where we have no
-  # predictions.
-  all_stations <- tibble(station = factor(levels(dat$station),
-                                          levels = levels(dat$station)),
-                         station_name =  factor(levels(dat$station_name),
-                                                levels = levels(dat$station_name)))
-
- preds <- all_stations %>%
-   left_join(preds, by = 'station')
-  
-  return(preds)
-}
-```
-
-#### Add Predictions to the Nested Tibble
-```{r}
-nested_data <- nested_data %>%
-  mutate(lm_predicts= map(parameter, extract_predicts))
-```
-
-## Options for More Complex Models
-### Hierarchical Models
-We could in principal also adjust models for different sampling histories
+# Options for More Complex Models
+We could in principal adjust models for different sampling histories
 (years and months) but there is likely little value to doing so as the
-sampling histories are fairly uniform.
+sampling histories are fairly uniform, with the exception of a few sites 
+added recently.
 
-### Time Series Considerations
-More seriously, these are time series. The periodicity of measurement is wide,
-and data are incomplete, but we should consider interannual and month to month
-variability, and whether there is any advantage to modeling those variations.
+More seriously, these are time series. The measurements are not strictly 
+periodic, and the interval between successive observations is large. 
+Autocorrelation in the raw data is likely substantial because of seasonal 
+patterns, but observations collected three weeks or a month apart are unlikely
+to be mechanistically correlated, once we take into account station, season, and 
+year.
 
-#### Create Long Form Data
+We should consider interannual and month to month (day of year?) variability, 
+and whether there is any advantage to modeling those variations.
+
+## Exploratory Graphics
+### Create Long Form Data
 We create long-form data to facilitate faceted graphics.
 ```{r}
 long_data <- recent_data %>%
   select(-time, -sample_depth, 
          -secchi, - bottom_flag) %>%
   relocate(water_depth, .after = month) %>%
-  pivot_longer(c(secchi_2:chl), names_to = 'parameter', values_to = 'value') %>%
+  pivot_longer(c(secchi_2:log1_chl), names_to = 'parameter', values_to = 'value') %>%
   filter(! is.na(value))
 ```
 
-#### Year to Year Plot
-```{r fig.width = 8, fig.height = 8}
-for (p in unique(long_data$parameter)) {
-  plt <- long_data %>%
-    filter(parameter == p) %>%
-    ggplot(aes(x = year, y = value)) +
-    geom_point(aes(color = month)) +
-    ylab(p) +
-    facet_wrap(~station) +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 90))
-  print(plt)
-}
-```
-
-Note that 'HR4' only has data in 2015 and 2019. 
-
-It is not obvious that there are strong year to year consistent variation.
-
-#### Month to Month Plot
+### Month to Month Plot
 ```{r fig.width = 8, fig.height = 8}
 for (p in unique(long_data$parameter)) {
   plt <- long_data %>%
     filter(parameter == p) %>%
     ggplot(aes(x = month, y = value)) +
-    geom_point(aes(color = year)) +
+    geom_jitter(aes(color = year), alpha = 0.5, width = 0.2, height = 0) +
     ylab(p) +
     facet_wrap(~station) +
-    theme_minimal() +
+    theme_cbep() +
     theme(axis.text.x = element_text(angle = 90))
   print(plt)
 }
@@ -397,19 +303,23 @@ for (p in unique(long_data$parameter)) {
 
 Note the relatively limited data for Chlorophyll.
 
-Several Parameters show marked seasonal patterns. A few sites on a few other
-parameters may  show seasonal or year to year variation, but fitting that
+Several parameters show marked seasonal patterns. Year to year changes are
+harder to discern.  A few individual sites may show seasonal or year to year
+variation even where that is not important across all sites, but fitting that
 variation would be pushing our luck, as we are implicitly reviewing a large
-number of parameters over a large number of sites, thus triggering an effective
+number of parameters over a large number of sites, thus triggering a
 multiple comparisons problem.
 
 We may be able to use the month by month relations to slightly reduce
-standard errors in our models.  They probably have little value in the context
-of recent parameter estimation, but they may have significant value in
-identifying long-term trends.
+standard errors in our models.  Such models probably have little value for
+parameter estimation here, but they may have significant value in identifying 
+long-term trends.
 
 ## Hierarchical Models
-We fit a year to year random factor and seasonal (monthly) terms.
+We fit a year to year random factor and seasonal (monthly) terms. This reflects 
+our belief that each year sets up somewhat differently due to weather, 
+especially in the spring, but that some seasonal patterns shuold be robust, and
+of potential direct interest to us.
 ```{r}
 nested_data <- nested_data %>%
   mutate(lmers = map(data, function(df) gam(value ~ station + month + 
@@ -437,11 +347,11 @@ the difference is small, and it complicates interpretation later.
 Log 1 Chlorophyll is better than either untransformed chlorophyll or log 
 of chlorophyll. 
 
-#### Refit the CHlorophyll Model
+### Refit the Chlorophyll Model
 We want the transformation in the model object, so we can use the tools in
 `emmeans` to extract marginal means.  We refit the chlorophyll model, add it
 to the nested tibble, and delete the other two chlorophyll data rows and the 
-square root transformed Secchi depth row.  
+square root transformed Secchi depth row.
 ```{r}
 df <- nested_data %>%
   filter(parameter == 'chl') %>%
@@ -458,7 +368,7 @@ nested_data <- nested_data %>%
   filter(! parameter %in% c('log_chl', 'log1_chl', 'sqrt_secchi'))
 ```
 
-#### ANOVAS
+### ANOVAS
 ```{r}
 for (p in nested_data$parameter) {
   cat(p)
@@ -470,61 +380,97 @@ Note that the conclusions are that ALL parameters vary seasonally and by
 location.  Year to year variation is also important for all
 parameters, which is perhaps less obvious. (Note that this model 
 did NOT fit interaction terms, (although they are likely to be important
-for some parameters).  
+for some parameters).
 
 None of that is likely to come as a surprise.  Much of the value here is to 
-confirm our intuition that that is the case, and provide  mechanism for
+confirm our intuition.
 
-Again, despite high levels of statistical significance for these models, the
-models are not terribly appropriate for either salinity or pH data.
+Despite high levels of statistical significance for these models, the
+models are not terribly appropriate for either salinity or pH data because of 
+residuals far from normally distributed
 
-### Generate Predictions
-#### Prediction Function
+# Associations with Temperature
+We emphasize in the text and presentation that temperature acts as an important 
+surrogate for the relative influence of offshore waters on local conditions in 
+the Bay.  If that is the case, we should be able to see high correlation with 
+Temperature for the other parameters, especially after accounting for other known
+covariates.
+
+We take three approaches to check for the importance of temperature as a 
+predictor of other water quality parameters:
+
+1.   We examine whether temperature is a significant predictor of other
+parameters in linear models where we treat station and year as random factors
+
+2.  
+ 
+ 
+ We need to regenerate the long-form data, retaining temperature asa predictor
+ variable, not breaking it into a separate dataframe.
+ 
+ We create long-form data to facilitate faceted graphics.
+
 ```{r}
-extract_emms <- function (parm, df = nested_data) {
-  # Pull the information for the selected parameter
-  sel <- df %>%
+ nested_data_2 <- recent_data %>%
+  select(-dt, -time, -sample_depth, 
+         -secchi, - bottom_flag) %>%
+  mutate(year_f = factor(year)) %>%
+  relocate(water_depth, temperature, .after = month) %>%
+  pivot_longer(c(secchi_2:log1_chl), names_to = 'parameter', values_to = 'value') %>%
+  filter(! is.na(value)) %>%
+  group_by(parameter) %>%
+  nest() %>%
+  left_join(units, by = 'parameter')
+ 
+```
+
+## Hierarchical Model
+```{r}
+nested_data_2 <- nested_data_2 %>%
+  mutate(lmers_temp = map(data, function(df) gam(value ~  temperature +
+                                              s(year_f, bs = 're') +
+                                              s(station, bs = 're'), 
+                                            data = df)))
+```
+
+```{r}
+for (parm in nested_data_2$parameter) {
+  row = nested_data_2 %>%
     filter(parameter == parm)
-  
-  #Pull the related data from the nested tibble
-  dat <- sel$data[[1]]
-  test <- ! is.na(dat$value)
-  dat <- dat[test,]
-  
-  # Pull the model
-  mod <- sel$lmers[[1]]
+  cat('\n\n')
+  cat(parm)
+  print(anova(row$lmers_temp[[1]]))
+  }
+```
 
-  # This time, we want station marginal means, averaged across years and months
-  # `emmeans()` pulls values direct from the model object, so we do not need to
-  # provide a Station List, although we will still need to expand the 
-  # list of stations
-  
-  preds <- emmeans(mod, 'station', type = 'response') %>%
-    summary()
-  
-  # add in a full suite of stations, so we have NAs where we have no
-  # predictions.
-  all_stations <- tibble(station = factor(levels(dat$station),
-                                          levels = levels(dat$station)),
-                         station_name =  factor(levels(dat$station_name),
-                                                levels = levels(dat$station_name)))
+So all parameters show significant correlations with temperature, treating 
+Years and Stations as random factors. 
 
- preds <- all_stations %>%
-   left_join(preds, by = 'station')
+But that's not exactly the  question we want to ask. We want to ask if stations 
+are structured by temperature, not if temperature correlates with other 
+parameters within (random) stations and years.
+
+## Correlations of Station Medians with Temperature
+We use Kendall's Tau as a robust / resistant alternative to Pearson Correlation 
+Coefficient.  A Spearman rank correlation would also be appropriate.
+```{r}
+tmp <- sum_data %>%
+  select(station, contains('_med')) %>%
+  rename_all(~sub('_med', '', .)) %>%
+  relocate(temperature, .after = station)
   
-  return(preds)
+for (parm in names(tmp)[3:11]) {
+  cat('\n\n')
+  cat(parm, '\n')
+  print(cor.test(tmp$temperature, tmp[[parm]], method = "kendall"))
 }
 ```
 
-#### Add Predictions to the Nested Tibble
-```{r}
-nested_data <- nested_data %>%
-  mutate(lmer_predicts= map(parameter, extract_emms))
-```
 
-
-#### Prediction Plots
-
-
+*  Warmer waters have:  
+   *  Lower water clarity  
+   *  Lower dissolved oxygen and percent saturation  
+   *  Lower pH  
+   * Higher chlorophyll  
 
 
