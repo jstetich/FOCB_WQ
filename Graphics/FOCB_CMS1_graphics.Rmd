@@ -643,12 +643,6 @@ my_label_fxn <- function(brks) {
 }
 ``` 
 
-
-```{r}
-hcl_palettes("diverging", n = 7, plot = TRUE)
-```
-
-
 #### Plot
 ```{r,  facet_prof, fig.width = 7, fig.height = 5}
 facet.labs <-         c("Temperature (°C)", 'Salinity (PSU)', 'Dissolved Oxygen (mg/l)', 

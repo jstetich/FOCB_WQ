@@ -808,12 +808,6 @@ my_label_fxn <- function(brks) {
 }
 ```
 
-``` r
-hcl_palettes("diverging", n = 7, plot = TRUE)
-```
-
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-1-1.png" style="display: block; margin: auto;" />
-
 #### Plot
 
 ``` r
