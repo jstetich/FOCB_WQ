@@ -778,7 +778,7 @@ add_sum (plt, the_data, do, pco2, with_line = TRUE)
 ```
 
 ### Dissolved Oxygen and Temperature
-```{r}
+```{r, width = 5, height = 4}
 plt <- cross_plot(the_data, temperature, do, color_parm = "Month",
                             y_label = "Dissolved Oxygen (mg/l)", 
                             x_label = "Temperature (°C)",
@@ -790,6 +790,9 @@ plt <- cross_plot(the_data, temperature, do, color_parm = "Month",
 add_sum (plt, the_data, temperature, do, with_line = TRUE) +
     guides(color = guide_legend(override.aes = list(alpha = 1, size = 3),
                               byrow = TRUE,  nrow = 2))
+
+ggsave('figures/cms_do_temp.pdf', device = cairo_pdf, 
+        width = 5, height = 4)
 ```
 
 #### Compare Daily Data

@@ -3,13 +3,15 @@ Graphic Summaries of of General Water Quality (Sonde) Data From FOCB
 Curtis C. Bohlen, Casco Bay Estuary Partnership
 2/18/2021
 
+-   [Introduction](#introduction)
 -   [Load Libraries](#load-libraries)
 -   [Load Data](#load-data)
     -   [Establish Folder Reference](#establish-folder-reference)
     -   [Load The Data](#load-the-data)
         -   [Primary Data](#primary-data)
+    -   [Transformed Chlorophyll Data](#transformed-chlorophyll-data)
     -   [Create Long Form Data](#create-long-form-data)
-    -   [Create Daily Data Sumamries](#create-daily-data-sumamries)
+    -   [Create Daily Data Summaries](#create-daily-data-summaries)
 -   [Exploratory Graphics](#exploratory-graphics)
 -   [Summary Statistics](#summary-statistics)
     -   [Monthly Summary Statistics](#monthly-summary-statistics)
@@ -31,6 +33,7 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
         -   [Temperature](#temperature)
         -   [Salinity](#salinity)
         -   [Chlorophyll A](#chlorophyll-a-1)
+        -   [Joint Plot](#joint-plot-1)
     -   [Cross-Plots](#cross-plots-1)
         -   [Dissolved Oxygen and
             PCO<sub>2</sub>](#dissolved-oxygen-and-pco2)
@@ -38,15 +41,31 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
             Temperature](#dissolved-oxygen-and-temperature)
         -   [Dissolved Oxygen and
             Chlorophyll](#dissolved-oxygen-and-chlorophyll)
-        -   [Dissolved Oxygen and
-            Chlorophyll](#dissolved-oxygen-and-chlorophyll-1)
-        -   [Percent Saturation and
-            Temperature](#percent-saturation-and-temperature)
-        -   [Salinity versus Temperature](#salinity-versus-temperature)
 
 <img
     src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
     style="position:absolute;top:10px;right:50px;" />
+
+# Introduction
+
+This Notebook provides graphic summaries of data from Friends of Casco
+Bay’s “CMS1” monitoring location, on Cousins Island, in Casco Bay,
+Maine. We focus here on analysis of primary sonde data on temperature,
+dissolved oxygen, salinity, and chlorophyll A.
+
+This reflects only a small portion of FOCB’s monitoring activity.
+
+Other analyses in this SoCB GitHub repositories look in more detail
+at:  
+1. “Historical”Citizen Steward" Data from nearly thirty years of
+monitoring.  
+2. Continuing sampling conducted at a smaller number of locations by
+FOCB staff.
+
+Analyses in OTHER GitHub archived look into the following:  
+3. Coastal acidification-related data collection at this same site.  
+4. Nutrient-related data, especially data on ambient nitrogen
+concentrations in and around portland harbor.
 
 # Load Libraries
 
@@ -164,6 +183,21 @@ the_data <- the_data %>%
   arrange(dt)                # Force data are in chronological order
 ```
 
+## Transformed Chlorophyll Data
+
+For our data based on FOCB’s surface water (grab sample) data, we
+presented analyses not of raw chlorophyll data, but analysis of log
+(Chlorophyll + 1) data. The transformed values better correspond to
+assumptions of normality used is statistical analyses. We provide a
+transformed version here so that we can produce graphics that are
+visually consistent in terms of presentation.
+
+``` r
+the_data <- the_data %>%
+  mutate(chl_log1 = log1p(chl)) %>%
+  relocate(chl_log1, .after = chl)
+```
+
 ## Create Long Form Data
 
 ``` r
@@ -176,6 +210,7 @@ long_data <- the_data %>%
                                        'do',
                                        'pctsat',
                                        'chl',
+                                       'chl_log1',
                                        'ph',
                                        'pco2',
                                        'ta',
@@ -183,14 +218,14 @@ long_data <- the_data %>%
                                        'omega_a')))
 ```
 
-## Create Daily Data Sumamries
+## Create Daily Data Summaries
 
 ``` r
 daily_data <- the_data %>%
   select(-hour, -year, -month, -day, -doy) %>%         # Will recalculate these 
   group_by(thedate) %>%
-  summarise_at(c("temperature", "salinity", "do", "pctsat", "chl", "ph",
-                 "pco2", "ta", "dic", 'omega_a'),
+  summarise_at(c("temperature", "salinity", "do", "pctsat", "chl", "chl_log1", 
+                 "ph", "pco2", "ta", "dic", 'omega_a'),
                c(avg    = function(x) mean(x, na.rm=TRUE),
                  med    = function(x) median(x, na.rm=TRUE),
                  rng    = function(x) {suppressWarnings(max(x, na.rm=TRUE) -
@@ -221,7 +256,7 @@ the_data %>%
 
 ``` r
 the_data %>% 
-  ggpairs(c(4,5, 8, 10), progress=FALSE)
+  ggpairs(c(4,5, 8, 11), progress=FALSE)
 ```
 
 <img src="FOCB_CMS1_graphics_files/figure-gfm/pairs_plot_2-1.png" style="display: block; margin: auto;" />
@@ -240,14 +275,14 @@ when looking at percent saturation.
 \* Temperature show strong bimodal distribution, presumably because of
 winter and summer temperature regimes.  
 \* DO shows weak bimodal structure, but percent saturation does not.  
-\* pH data in negatively correlated with pCO<sub>2</sub> and
+\* pH data is negatively correlated with pCO<sub>2</sub> and
 temperature.  
 There is little data at low salinity, but most of it is also low
 chlorophyll.
 
 ``` r
 the_data %>% 
-  ggpairs(c(4, 6, 8, 10), progress=FALSE)
+  ggpairs(c(4, 6, 8, 11), progress=FALSE)
 ```
 
 <img src="FOCB_CMS1_graphics_files/figure-gfm/pairs_plot_4-1.png" style="display: block; margin: auto;" />
@@ -257,7 +292,7 @@ two variables are correlated.
 -   Negative pH to PCO<sub>2</sub> relationships are fairly robust.
 
 ``` r
-the_data %>% ggpairs(c(8, 10:13), progress=FALSE)
+the_data %>% ggpairs(c(8, 11:14), progress=FALSE)
 ```
 
 <img src="FOCB_CMS1_graphics_files/figure-gfm/pairs_plot_5-1.png" style="display: block; margin: auto;" />
@@ -285,6 +320,7 @@ result <- long_data %>%
                       'DO (mg/l)',
                       'Percent Saturation',
                       'Chlorophyll-a',
+                      'log(Chlorophyll-a + 1)',
                       'pH (NMS)',
                       'pCO2',
                       'Total Alkalinity',
@@ -307,6 +343,7 @@ knitr::kable(result %>% select(-parm),
 | DO (mg/l)                  |     5.4 |    9.82 |    9.9 |   14.439 |   1.55 |  29325 |
 | Percent Saturation         |    67.2 |  103.80 |  104.5 |  146.200 |   9.64 |  29325 |
 | Chlorophyll-a              |    -0.2 |    5.21 |    7.5 |  130.760 |   7.66 |  29556 |
+| log(Chlorophyll-a + 1)     |    -0.3 |    1.83 |    1.9 |    4.881 |   0.67 |  29556 |
 | pH (NMS)                   |     7.7 |    8.06 |    8.1 |    8.380 |   0.09 |  29330 |
 | pCO2                       |   132.3 |  406.12 |  416.6 | 1037.794 | 121.33 |  19438 |
 | Total Alkalinity           |   779.2 | 1724.40 | 1761.7 | 4598.056 | 338.26 |  19438 |
@@ -327,7 +364,7 @@ marginal means from a GAMM. We do not pursue that idea in this notebook.
 ``` r
 monthly_tbl <- the_data %>%
   select(datetime, year, Month, temperature, salinity,
-         do, pctsat, chl, ph, pco2, dic, ta, omega_a) %>%
+         do, pctsat, chl, chl_log1, ph, pco2, dic, ta, omega_a) %>%
 
   pivot_longer(temperature:omega_a, names_to = 'parameter',
                values_to = 'value') %>%
@@ -351,6 +388,10 @@ knitr::kable(monthly_tbl)
 | chl         | median |   12.410 |    5.900 |    7.930 |    4.260 |    2.540 |    3.320 |    4.420 |    5.650 |    5.580 |    6.060 |    4.340 |    6.930 |
 | chl         | sd     |    6.001 |    5.696 |   14.761 |   10.516 |    3.009 |    2.651 |    3.888 |    5.322 |    7.118 |    4.101 |    4.657 |    9.473 |
 | chl         | count  | 2231.000 | 2016.000 | 2221.000 | 2159.000 | 2166.000 | 2157.000 | 2503.000 | 2942.000 | 2802.000 | 2975.000 | 2420.000 | 2964.000 |
+| chl\_log1   | avg    |    2.420 |    1.930 |    2.190 |    1.900 |    1.340 |    1.430 |    1.690 |    1.920 |    1.970 |    1.980 |    1.740 |    2.100 |
+| chl\_log1   | median |    2.600 |    1.930 |    2.190 |    1.660 |    1.260 |    1.460 |    1.690 |    1.890 |    1.880 |    1.950 |    1.670 |    2.070 |
+| chl\_log1   | sd     |    0.535 |    0.582 |    0.883 |    0.787 |    0.491 |    0.530 |    0.542 |    0.524 |    0.619 |    0.463 |    0.578 |    0.707 |
+| chl\_log1   | count  | 2231.000 | 2016.000 | 2221.000 | 2159.000 | 2166.000 | 2157.000 | 2503.000 | 2942.000 | 2802.000 | 2975.000 | 2420.000 | 2964.000 |
 | dic         | avg    | 1363.440 | 1634.580 | 1583.830 | 1413.800 | 1412.660 | 1656.080 | 1835.760 | 1805.300 | 1806.390 | 1838.370 | 1626.610 | 1644.730 |
 | dic         | median | 1323.440 | 1489.890 | 1524.520 | 1367.040 | 1433.490 | 1560.790 | 1804.770 | 1733.690 | 1768.190 | 1760.560 | 1650.090 | 1593.310 |
 | dic         | sd     |  129.538 |  332.598 |  288.255 |  217.334 |  326.648 |  303.766 |  329.593 |  329.514 |  234.891 |  266.370 |  206.802 |  235.815 |
@@ -480,7 +521,7 @@ full_profile <- function(dat, parm, dt = 'dt', color = 'temperature',
   }
   else {
     plt <- plt +
-        scale_color_viridis_c(name = color_label, optyion = 'viridis')
+        scale_color_viridis_c(name = color_label, option = 'viridis')
   }
   
   if(! is.na(guide)) {
@@ -547,7 +588,11 @@ season_profile <- function(dat, parm, doy = 'doy', year = "year",
     guides(colour = guide_legend(override.aes = list(alpha = 1, size = 2))) +
     
     theme_cbep(base_size = 12) +
-    theme(axis.text.x=element_text(angle=90, vjust = 1.5))
+    theme(axis.text.x=element_text(angle=90, vjust = 1.5)) +
+    theme(legend.position =  'bottom',
+          legend.title = element_text(size = 10))
+  
+  
   
   if(add_smooth) {
          plt <- plt + geom_smooth(method = 'gam', 
@@ -609,10 +654,13 @@ cross_plot <- function(dat, x_parm, y_parm, color_parm = "Month",
     xlab('') +
     ylab(y_parmname) +
 
-    guides(colour = guide_legend(override.aes = list(alpha = 1, size = 2),
-                                 byrow = TRUE)) +
     
-    theme_cbep(base_size = 12)
+    theme_cbep(base_size = 12) +
+    theme(legend.position =  'bottom',
+          legend.title = element_text(size = 10)) +
+    
+    guides(color = guide_legend(override.aes = list(alpha = 1, size = 2),
+                                 byrow = TRUE)) +
   
   if(add_smooth) {
          plt <- plt + geom_smooth(method = 'gam', 
@@ -695,38 +743,100 @@ add_sum <- function(p, dat, x_parm, y_parm, color_parm = "Month",
 ``` r
 plt <- full_profile(the_data, chl, dt = 'dt', color = 'Month', 
              label = 'Chlorophyll A (mg/l)', 
-             guide = quantile(the_data$temperature, .9, na.rm = TRUE))
+             guide = quantile(the_data$chl, .9, na.rm = TRUE))
 plt
 #> Warning: Removed 681 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-6-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-7-1.png" style="display: block; margin: auto;" />
+
+#### Transformed Version
+
+``` r
+plt <- full_profile(the_data, chl_log1, dt = 'dt', color = 'Month', 
+             label = 'Chlorophyll A (mg/l)', 
+             guide = quantile(the_data$chl_log1, .9, na.rm = TRUE))
+plt +
+  scale_y_continuous(trans = 'log1p')
+#> Warning: Removed 681 rows containing missing values (geom_point).
+```
+
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-8-1.png" style="display: block; margin: auto;" />
 
 ### Joint Plot
 
+#### Guide Function to Transform Chlorophyll Axis
+
 ``` r
-facet.labs <-         c('Dissolved Oxygen (mg/l)', 'Salinity (PSU)', 
-                        'Percent Saturation', 'Chlorophyll A (mg/l)')
-names(facet.labs) <-  c('do', 'salinity', 'pctsat', 'chl')
+prefered_breaks =  c(0, 1, 5, 10, 50, 100)
 
-href = tibble(Parameter = c('do', 'salinity', 'pctsat', 'chl'), 
-              val = c(NA_real_, NA_real_, 85, NA_real_))
+my_breaks_fxn <- function(lims) {
+  #browser()
+  if(max(lims) < 10) {
+    # Then we're looking at our transformed Chl data
+  a <- prefered_breaks
+    return(log(a +1))
+  }
+  else {
+    return(labeling::extended(lims[[1]], lims[[2]], 5))
+  }
+}
 
-long_data %>%
-  filter(Parameter %in% c('do', 'salinity', 'pctsat', 'chl')) %>%
-  mutate(Parameter = factor(Parameter, 
-                            levels = c('do', 'salinity', 'pctsat', 'chl'))) %>%
-  full_profile(parm = Value, dt = 'dt', color = "Month", 
-               label = '', color_label = '') +
-  geom_hline(data = href, mapping = aes(yintercept = val),
-             lty = 'dotted', color = 'gray15') +
-  facet_wrap(~ Parameter, nrow = 2, scales = 'free_y',
-             labeller = labeller(Parameter = facet.labs) )
-#> Warning: Removed 3318 rows containing missing values (geom_point).
-#> Warning: Removed 3 rows containing missing values (geom_hline).
+# We are cheating a bit here by plotting transformed data, but providing 
+# labels that are back transformed.  That work is conducted by the 
+# labeling function.
+my_label_fxn <- function(brks) {
+  #browser()
+  # frequently, brks is passed with NA in place of one or more 
+  # of the candidate brks, even after I pass a vector of breaks.
+  # In particular, "pretty" breaks outside the range of the data
+  # are dropped and replaced with NA.
+  a <- prefered_breaks
+  b <- round(log(a+1), 3)
+  real_breaks = round(brks[! is.na(brks)], 3)
+  if (all(real_breaks %in% b)) {
+    # then we have our transformed Chl data
+    return(a)
+  }
+  else {
+    return(brks)
+  }
+}
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-7-1.png" style="display: block; margin: auto;" />
+#### Plot
+
+``` r
+facet.labs <-         c("Temperature (°C)", 'Salinity (PSU)', 'Dissolved Oxygen (mg/l)', 
+                        'Chlorophyll A (mg/l)')
+names(facet.labs) <-  c("temperature", 'salinity', 'do', 'chl_log1')
+
+
+long_data %>%
+  filter(Parameter %in% c("temperature", 'salinity', 'do', 'chl_log1')) %>%
+  mutate(Parameter = factor(Parameter, 
+                            levels =  c("temperature", 'salinity', 'do', 'chl_log1'))) %>%
+  full_profile(parm = Value, dt = 'dt', color = 'hour', 
+               label = '', color_label = 'Hour of the Day') +
+  #geom_hline(data = href, mapping = aes(yintercept = val),
+  #           lty = 'dotted', color = 'gray15') +
+  
+  
+  scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
+  
+  facet_wrap(~ Parameter, nrow = 2, scales = 'free_y',
+             labeller = labeller(Parameter = facet.labs) )
+#> Warning: Removed 2745 rows containing missing values (geom_point).
+```
+
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-10-1.png" style="display: block; margin: auto;" />
+
+``` r
+
+ ggsave('figures/cms_history.pdf', device = cairo_pdf, 
+        width = 7, height = 5)
+#> Warning: Removed 2745 rows containing missing values (geom_point).
+```
 
 ## Seasonal Profiles
 
@@ -749,7 +859,7 @@ season_profile(the_data, do, alpha = 0.25,
 #> Warning: Removed 912 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-8-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-11-1.png" style="display: block; margin: auto;" />
 
 ### Percent Saturation
 
@@ -767,7 +877,7 @@ season_profile(the_data, pctsat, alpha = 0.25,
 #> Warning: Removed 912 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-9-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-12-1.png" style="display: block; margin: auto;" />
 
 ### Temperature
 
@@ -781,7 +891,7 @@ season_profile(the_data, temperature, doy, alpha = 0.25,
 #> Warning: Removed 339 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-10-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-13-1.png" style="display: block; margin: auto;" />
 
 ### Salinity
 
@@ -795,26 +905,57 @@ season_profile(the_data, salinity, doy, alpha = 0.25,
 #> Warning: Removed 813 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-11-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-14-1.png" style="display: block; margin: auto;" />
 
 ### Chlorophyll A
 
 ``` r
-season_profile(the_data, chl, doy, alpha = 0.5,
+season_profile(the_data, chl_log1, doy, alpha = 0.5,
                size = .5,
                label = "Chlorophyll A (mg/l)",
                add_smooth = TRUE, 
-               with_se = FALSE)
+               with_se = FALSE) +
+  scale_y_continuous(trans = 'log1p')
 #> Warning: Removed 681 rows containing non-finite values (stat_smooth).
 #> Warning: Removed 681 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-12-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-15-1.png" style="display: block; margin: auto;" />
+
+### Joint Plot
 
 ``` r
-  #scale_y_log10(limits = c(0.01, 500), 
-  #              labels = scales::label_number(accuracy = .01))
+facet.labs <-         c("Temperature (°C)", 'Salinity (PSU)', 'Dissolved Oxygen (mg/l)', 
+                        'Chlorophyll A (mg/l)')
+names(facet.labs) <-  c("temperature", 'salinity', 'do', 'chl_log1')
+
+
+long_data %>%
+  filter(Parameter %in% c("temperature", 'salinity', 'do', 'chl_log1')) %>%
+  mutate(Parameter = factor(Parameter, 
+                            levels =  c("temperature", 'salinity', 'do', 'chl_log1'))) %>%
   
+  season_profile(Value, doy = 'doy',
+                size = .5, alpha = 0.25,
+                label = '',
+                add_smooth = FALSE, 
+                 with_se = FALSE) +
+
+  
+  scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
+  
+  facet_wrap(~ Parameter, nrow = 2, scales = 'free_y',
+             labeller = labeller(Parameter = facet.labs) )
+#> Warning: Removed 2745 rows containing missing values (geom_point).
+```
+
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-16-1.png" style="display: block; margin: auto;" />
+
+``` r
+  
+ ggsave('figures/cms_climatology.pdf', device = cairo_pdf, 
+        width = 7, height = 5)
+#> Warning: Removed 2745 rows containing missing values (geom_point).
 ```
 
 ## Cross-Plots
@@ -827,24 +968,26 @@ season_profile(the_data, chl, doy, alpha = 0.5,
 plt <- cross_plot(the_data, do, pco2, color_parm = "Month",
                             x_label = "Dissolved Oxygen (mg/l)", 
                             y_label = "pCO2 (uAtm)",
-                            alpha = 0.25,
+                            alpha = 0.1,
                             size = 0.5,
                             add_smooth = FALSE,
                             with_se = FALSE)
 plt <- plt + 
-  ylab(expression (pCO[2]~(mu*Atm)))
+  ylab(expression (pCO[2]~(mu*Atm)))+
+  guides(color = guide_legend(override.aes = list(alpha = 1, size = 3),
+                              byrow = TRUE,  nrow = 2))
 plt
 #> Warning: Removed 10896 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-13-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-17-1.png" style="display: block; margin: auto;" />
 
 ``` r
 add_sum (plt, the_data, do, pco2, with_line = TRUE)
 #> Warning: Removed 10896 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-14-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-18-1.png" style="display: block; margin: auto;" />
 
 ### Dissolved Oxygen and Temperature
 
@@ -852,16 +995,24 @@ add_sum (plt, the_data, do, pco2, with_line = TRUE)
 plt <- cross_plot(the_data, temperature, do, color_parm = "Month",
                             y_label = "Dissolved Oxygen (mg/l)", 
                             x_label = "Temperature (°C)",
-                            alpha = 0.25,
+                            alpha = 0.1,
                             size = 0.5,
                             add_smooth = FALSE,
                             with_se = FALSE)
 
-add_sum (plt, the_data, temperature, do, with_line = TRUE)
+add_sum (plt, the_data, temperature, do, with_line = TRUE) +
+    guides(color = guide_legend(override.aes = list(alpha = 1, size = 3),
+                              byrow = TRUE,  nrow = 2))
 #> Warning: Removed 912 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-15-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-19-1.png" style="display: block; margin: auto;" />
+
+``` r
+ggsave('figures/cms_do_temp.pdf', device = cairo_pdf, 
+        width = 5, height = 4)
+#> Warning: Removed 912 rows containing missing values (geom_point).
+```
 
 #### Compare Daily Data
 
@@ -874,104 +1025,51 @@ plt <- cross_plot(daily_data, temperature_med, do_med, color_parm = "Month",
                             add_smooth = FALSE,
                             with_se = FALSE)
 
-add_sum (plt, daily_data, temperature_med, do_med, with_line = TRUE)
+add_sum (plt, daily_data, temperature_med, do_med, with_line = TRUE) +
+    guides(color = guide_legend(override.aes = list(alpha = 1, size = 3),
+                              byrow = TRUE,  nrow = 2))
 #> Warning: Removed 27 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-16-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-20-1.png" style="display: block; margin: auto;" />
 
 ### Dissolved Oxygen and Chlorophyll
 
 ``` r
-plt <- cross_plot(the_data, do, chl, color_parm = "Month",
+plt <- cross_plot(the_data, do, chl_log1, color_parm = "Month",
                             x_label = "Dissolved Oxygen (mg/l)", 
                             y_label = "Chlorophyll A (mg/l)",
-                            alpha = 0.25,
+                            alpha = 0.1,
                             size = 0.5,
                             add_smooth = FALSE,
                             with_se = FALSE)
 
-add_sum (plt, the_data, do, chl, with_line = TRUE) #+
+  add_sum (plt, the_data, do, chl_log1, with_line = TRUE) +
+  scale_y_continuous(trans = 'log1p') +
+      guides(color = guide_legend(override.aes = list(alpha = 1, size = 3),
+                              byrow = TRUE,  nrow = 2))
 #> Warning: Removed 1004 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-17-1.png" style="display: block; margin: auto;" />
-
-``` r
- # scale_y_log10(labels = scales::label_number(accuracy = .01))
-```
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-21-1.png" style="display: block; margin: auto;" />
 
 #### Compare Daily Data
 
 ``` r
-plt <- cross_plot(daily_data, do_med, chl_med, color_parm = "Month",
+plt <- cross_plot(daily_data, do_med, chl_log1_med, color_parm = "Month",
                             x_label = "Dissolved Oxygen (mg/l)", 
                             y_label = "Chlorophyll A (mg/l)",
                             alpha = .5,
                             size = 1,
                             add_smooth = FALSE,
-                            with_se = FALSE)
+                            with_se = FALSE) +
+  scale_y_continuous(trans = 'log1p')
 
-add_sum (plt, daily_data, do_med, chl_med, with_line = TRUE)
+add_sum(plt, daily_data, do_med, chl_log1_med, with_line = TRUE) +
+    guides(color = guide_legend(override.aes = list(alpha = 1, size = 3),
+                              byrow = TRUE,  nrow = 2))
 #> Warning: Removed 28 rows containing missing values (geom_point).
 ```
 
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-18-1.png" style="display: block; margin: auto;" />
-
-#### Color by Day of Year
-
-### Dissolved Oxygen and Chlorophyll
-
-``` r
-plt <- cross_plot(the_data, do, chl, color_parm = doy,
-                            x_label = "Dissolved Oxygen (mg/l)", 
-                            y_label = "Chlorophyll A (mg/l)",
-                            color_label = 'Day of Year',
-                            alpha = 0.25,
-                            size = 0.5,
-                            add_smooth = TRUE,
-                            with_se = FALSE)
-plt + 
-  scale_color_viridis_c(breaks = c(50, 100, 150, 200, 250, 300, 350),
-                        name = 'Day of Year', option = 'viridis')
-#> Scale for 'colour' is already present. Adding another scale for 'colour',
-#> which will replace the existing scale.
-#> Warning: Removed 1004 rows containing non-finite values (stat_smooth).
-#> Warning: Removed 1004 rows containing missing values (geom_point).
-```
-
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-19-1.png" style="display: block; margin: auto;" />
-
-### Percent Saturation and Temperature
-
-``` r
-plt <- cross_plot(the_data, temperature, pctsat, color_parm = "Month",
-                            y_label = "Percent Saturation", 
-                            x_label = "Temperature (°C)",
-                            alpha = 0.25,
-                            size = 0.5,
-                            add_smooth = FALSE,
-                            with_se = FALSE)
-
-add_sum (plt, the_data, temperature, pctsat, with_line = TRUE)
-#> Warning: Removed 912 rows containing missing values (geom_point).
-```
-
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-20-1.png" style="display: block; margin: auto;" />
-
-### Salinity versus Temperature
-
-``` r
-plt <- cross_plot(the_data, temperature, salinity, color_parm = Month,
-                            y_label = "Salinity (PSU)", 
-                            x_label = "Temperature (°C)",
-                            alpha = 0.25,
-                            size = 0.5,
-                            add_smooth = FALSE,
-                            with_se = FALSE)
-add_sum (plt, the_data, temperature, salinity, with_line = TRUE)
-#> Warning: Removed 814 rows containing missing values (geom_point).
-```
-
-<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-21-1.png" style="display: block; margin: auto;" />
+<img src="FOCB_CMS1_graphics_files/figure-gfm/unnamed-chunk-22-1.png" style="display: block; margin: auto;" />
 [Back to top](#)
