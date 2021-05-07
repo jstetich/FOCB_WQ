@@ -30,16 +30,11 @@ looking at deviations from daily median value.
 ```{r, load_libraries}
 library(tidyverse)
 library(readxl)
-#library(readr)
-
 
 library(mgcv)      # for gam() and gamm() models
 
 library(GGally)
-#library(zoo)
 library(lubridate)  # here, for the make_datetime() function
-
-#library(colorspace)  # her for diverging color pallettes
 
 library(CBEPgraphics)
 load_cbep_fonts()
