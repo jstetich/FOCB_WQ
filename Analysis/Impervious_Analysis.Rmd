@@ -43,14 +43,8 @@ library(readxl)
 library(readr)
 
 library(lme4)
-#library(mgcv)
-#library(maxLik)
 
 library(GGally)
-#library(zoo)
-#library(lubridate)  # here, for the make_datetime() function
-
-library(broom)
 
 library(CBEPgraphics)
 load_cbep_fonts()

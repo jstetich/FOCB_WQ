@@ -1,0 +1,446 @@
+---
+title: "Graphic Summaries of Diurnal Patterns is Water Quality (Sonde) Data From FOCB"
+author: "Curtis C. Bohlen, Casco Bay Estuary Partnership"
+date: "4/21/2021"
+output:
+  github_document:
+    toc: true
+    fig_width: 5
+    fig_height: 4
+---
+
+<img
+    src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
+    style="position:absolute;top:10px;right:50px;" />
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.align = 'center',
+                      fig.width = 5, fig.height = 4,
+                      collapse = TRUE, comment = "#>")
+```
+
+# Introduction
+This Notebook provides graphic summaries of data from Friends of Casco Bay's 
+"CMS1" monitoring location, on Cousins Island, in Casco Bay, Maine.  We focus 
+here on analysis of primary sonde data on temperature, dissolved oxygen, 
+salinity, and chlorophyll A.  Specifically, we look at diurnal patterns  by 
+looking at deviations from daily median value.
+
+# Load Libraries
+```{r, load_libraries}
+library(tidyverse)
+library(readxl)
+#library(readr)
+
+
+library(mgcv)      # for gam() and gamm() models
+
+library(GGally)
+#library(zoo)
+library(lubridate)  # here, for the make_datetime() function
+
+#library(colorspace)  # her for diverging color pallettes
+
+library(CBEPgraphics)
+load_cbep_fonts()
+theme_set(theme_cbep())
+```
+
+
+# Load Data
+## Establish Folder Reference
+```{r, folder_refs}
+sibfldnm <- 'Original_Data'
+parent   <- dirname(getwd())
+sibling  <- file.path(parent,sibfldnm)
+
+dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
+dir.create(file.path(getwd(), 'models'), showWarnings = FALSE)
+```
+
+## Load The Data
+We need to skip  the second row here, which is inconvenient largely because the
+default "guess" of data contents for each column is based on the contents of
+that first row of data.
+
+A solution in an answer to this stack overflow questions 
+https://stackoverflow.com/questions/51673418/how-to-skip-the-second-row-using-readxl) 
+suggests reading in the first row only to generate names, then skip the row of 
+names and the row of units, and read the "REAL" data. Note that we round the 
+timestamp on the data to the nearest hour.
+
+In earlier work, I found some inconsistencies in how daylight savings time was 
+dealt with.
+
+For some reason, excel is not reading in the dates and times correctly.  I have
+to reconstruct the time from components.  I am not certain of the timezone
+setting to read these files in correctly.
+
+### Primary Data
+```{r, load_data, warning = FALSE}
+
+fn    <- 'CMS1 Data through 2019.xlsx'
+fpath <- file.path(sibling,fn)
+
+mynames <- read_excel(fpath, sheet = 'Sheet1', n_max = 1, col_names = FALSE)
+mynames <- unname(unlist(mynames[1,]))  # flatten and simplify
+mynames[2] <- 'datetime'               # 
+mynames[4] <- 'depth'                   # Address non-standard names
+mynames[8] <- 'pctsat'
+mynames[18] <- 'omega_a'
+mynames <- tolower(mynames)             # convert all to lower case
+
+the_data <- read_excel(fpath, skip=2, col_names = FALSE)
+names(the_data) <- mynames
+rm(mynames)
+```
+
+We create an independent time stamp based on recorded year, month, day, etc. to
+directly address ambiguities of how dates and times are imported with daylight
+savings time, etc.  The parameter `tz = "America/New_York"` creates a time stamp
+that is tied to local time.  The time stamp under the hood is a numerical value,
+but with this timezone specification, the text form accounts for local daylight 
+savings time.
+```{r, create_timestamp}
+the_data <- the_data %>%
+  select(-count)  %>%       # datetime and time contain the same data
+  mutate(dt = make_datetime(year, month, day, hour, 0, tz = "America/New_York")) %>%
+  select(-datetime, -time) %>%
+  relocate(c(ta, dic, omega_a) , .after = "pco2") %>%
+  mutate(thedate  = as.Date(dt),
+         doy      = as.numeric(format(dt, format = '%j')),
+         # tstamp   = paste0(year, '/', sprintf("%02d", month), '/',
+         #                   sprintf("%02d", day), ' ', sprintf("%02d", hour)),
+         month = factor(month, labels = month.abb)) %>%
+  relocate(dt, thedate, year, month, day, hour, doy) %>%
+  arrange(dt)                # Force data are in chronological order
+```
+
+## Transformed Chlorophyll Data
+For our data based on FOCB's surface water (grab sample) data, we presented 
+analyses not of raw chlorophyll data, but analysis of log (Chlorophyll + 1)
+data.  The transformed values better correspond to assumptions of normality used
+is statistical analyses.  We provide a transformed version here so that we can
+produce graphics that are visually consistent in terms of presentation.
+```{r, transform_chl}
+the_data <- the_data %>%
+  mutate(chl_log1 = log1p(chl)) %>%
+  relocate(chl_log1, .after = chl)
+```
+
+
+## Add Season Factor
+```{r}
+the_data <- the_data %>%
+  mutate(season = recode_factor(month, 
+                                Jan  = 'Winter',
+                                Feb  = 'Winter',
+                                Mar  = 'Spring',
+                                Apr  = 'Spring',
+                                May  = 'Spring',
+                                Jun  = 'Summer',
+                                Jul  = 'Summer',
+                                Aug  = 'Summer',
+                                Sep  = 'Fall',
+                                Oct = 'Fall',
+                                Nov = 'Fall',
+                                Dec = 'Winter'
+                                )) %>%
+   mutate(season = factor(season, levels = c('Winter', 
+                                             'Spring', 
+                                             'Summer', 
+                                             'Fall')))
+```
+
+
+## Calculate Diurnal Deviations
+[Back to top](#)
+Because of highly skewed data distributions for some variables, we calculate 
+deviations from daily medians here.
+
+```{r hourly_deviations}
+dev_data <- the_data %>%
+  group_by(year, month, day) %>%
+  
+  # Calculate sample sizes for each day.
+  mutate(across(temperature:chl_log1, ~ sum(! is.na(.x)), .names = "{.col}_n")) %>%
+  mutate(across(temperature:chl_log1, median, na.rm = TRUE, .names = "{.col}_median")) %>%
+  ungroup(year, month, day) %>%
+
+  mutate(temperature_dev = temperature - temperature_median) %>%
+  mutate(salinity_dev = salinity - salinity_median) %>%
+  mutate(do_dev = do - do_median) %>%
+  mutate(pctsat_dev = pctsat - pctsat_median) %>%
+  mutate(ph_dev = ph - ph_median) %>%
+  mutate(chl_dev = chl - chl_median) %>%
+  mutate(chl_log1_dev = chl_log1 - chl_log1_median) %>%
+
+  
+  # Replace data from any days with less than 20 hours of data with NA
+  mutate(temperature_dev  = if_else(temperature_n < 20, NA_real_, temperature_dev)) %>%
+  mutate(salinity_dev = if_else(salinity_n    < 20, NA_real_, salinity_dev)) %>%
+  mutate(do_dev       = if_else(do_n          < 20, NA_real_, do_dev)) %>%
+  mutate(pctsat_dev   = if_else(pctsat_n      < 20, NA_real_, pctsat_dev)) %>%
+  mutate(ph_dev       = if_else(ph_n          < 20, NA_real_, ph_dev)) %>%
+  mutate(chl_dev      = if_else(chl_n         < 20, NA_real_, chl_dev)) %>%
+  mutate(chl_log1_dev = if_else(chl_log1_n    < 20, NA_real_, chl_log1_dev)) %>%
+
+  # Delete the daily sample size variable
+  select(-contains("_n"))
+```
+
+
+# Color Palette For Seasonal Display
+This is just a list, not a function like cbep_colors().
+```{r seasonal_palette}
+season_palette = c(cbep_colors()[1],
+                    cbep_colors()[4],
+                    cbep_colors()[2],
+                    'orange')
+```
+
+
+# DO Ribbon Graphics
+## Run the GAMM
+The following takes ~ 20 minutes to run (Windows 10, 64 bit, Intel i7 processor, 
+2.4 GHz).  
+
+Note that because we save a version of the model (to avoid rerunning this every
+time we alter anything in the Notebook), you need to delete the associated file 
+to force recalculation.
+
+The particular autocorrelation function we include here assumes a complete data 
+series (i.e., no gaps). This is not strictly correct here, but it is close, and 
+fitting a full model by date consumes too much memory.
+```{r gamm_do, cache = TRUE} 
+if (! file.exists('models/do_gam.rds')) {
+tm <- system.time(do_gam <- gamm(do_dev ~  s(hour, by = season, bs='cc', k=6),
+                 correlation = corAR1(form = ~ 1 | season),  # we run out of memory if we don't use a grouping
+                 data = dev_data))
+  saveRDS(do_gam, 'models/do_gam.rds')
+  print(tm)
+  rm(tm)
+} else {
+  do_gam <- readRDS('models/do_gam.rds')
+}
+```
+
+331 seconds ~ 5 minutes with season and year in the correlation structure
+1154 seconds ~ 20 minutes with only season in the covariate structure
+
+## Generate Predictions from the Model
+```{r predicts_co2}
+newdat <- expand.grid(hour = seq(0, 23),
+                    season = c('Winter', 'Spring', 'Summer', 'Fall'))
+p <- predict(do_gam$gam, newdata = newdat, se.fit=TRUE)
+newdat <- newdat %>%
+  mutate(pred = p$fit, se = p$se.fit)
+```
+
+## Create Ribbon Graphic
+The ribbon plot shows approximate 95% confidence intervals for the GAMM fits by
+season.
+```{r do_ribbon, fig.width = 4, fig.height = 4}
+ggplot(newdat, aes(x=hour, y=pred, color = season)) + #geom_line() +
+  geom_ribbon(aes(ymin = pred-(1.96*se),
+                  ymax = pred+(1.96*se),
+                  fill = season), alpha = 0.5,
+              color = NA) +
+  
+  theme_cbep(base_size= 12) +
+  theme(legend.key.width = unit(0.1,"in"),
+        legend.key.height = unit(0.1,"in"),
+        legend.text      = element_text(size = 10),
+        legend.position = c(0.75, 0.25)) +
+  scale_fill_manual(values = season_palette, name = '') +
+  scale_color_manual(values = season_palette, name = '') +
+
+  scale_x_continuous(limits = c(0,24),  breaks = c(0,6,12,18,24)) +
+
+  
+  xlab('Hour of Day') +
+  ylab('Dissolved Oxygen (mg/l)\n Difference from Daily Median')
+
+ggsave('figures/do_diurnal_seasons.pdf', device = cairo_pdf, width = 4, height = 4)
+```
+
+## Graphic with Points
+```{r do_ribbon_dots, fig.width = 4, fig.height = 4}
+ggplot(newdat, aes(x=hour, y=pred, color = season)) + #geom_line() +
+  geom_jitter(data = dev_data, mapping = aes(x = hour, y = do_dev, color = season),
+             width = 0.2, height = 0, alpha = 0.2, size = 0.5) +
+  geom_ribbon(aes(ymin = pred-(1.96*se),
+                  ymax = pred+(1.96*se),
+                  fill = season), alpha = 1,
+              color = NA) +
+  
+  theme_cbep(base_size= 12) +
+  theme(legend.key.width = unit(0.1,"in"),
+        legend.key.height = unit(0.1,"in"),
+        legend.text      = element_text(size = 10),
+        legend.position = c(0.75, 0.25)) +
+  scale_fill_manual(values = season_palette, name = '') +
+  scale_color_manual(values = season_palette, name = '') +
+
+  scale_x_continuous(limits = c(0,24),  breaks = c(0,6,12,18,24)) +
+
+  
+  xlab('Hour of Day') +
+  ylab('Dissolved Oxygen (mg/l)\n Difference from Daily Median')
+
+ggsave('figures/do_diurnal_seasons_dots.pdf', device = cairo_pdf, width = 4, height = 4)
+```
+
+# Run GAM models for Other Parameters
+We tried to work in nested tibbles, only to run into memory management issues.
+We fall back on running similar code for several of the remaining parameters.
+here we do not generate predictions, only output model sumamries and plot GAM 
+smoothers for inspection.
+
+```{r}
+rm(do_gam)
+```
+
+## Temperature
+```{r gamm_temperature, cache = TRUE} 
+if (! file.exists('models/temperature_gam.rds')) {
+tm <- system.time(temperature_gam <- gamm(temperature_dev ~  s(hour, by = season, bs='cc', k=6),
+                 correlation = corAR1(form = ~ 1 | season),  # we run out of memory if we don't use a grouping
+                 data = dev_data))
+  saveRDS(temperature_gam, 'models/temperature_gam.rds')
+  print(tm)
+  rm(tm)
+} else {
+  temperature_gam <- readRDS('models/temperature_gam.rds')
+}
+```
+
+```{r}
+summary(temperature_gam$gam)
+```
+
+```{r}
+plot(temperature_gam$gam)
+```
+
+```{r}
+rm(temperature_gam)
+```
+
+## Salinity
+```{r gamm_salinity, cache = TRUE} 
+if (! file.exists('models/salinity_gam.rds')) {
+tm <- system.time(salinity_gam <- gamm(salinity_dev ~  s(hour, by = season, bs='cc', k=6),
+                 correlation = corAR1(form = ~ 1 | season),  # we run out of memory if we don't use a grouping
+                 data = dev_data))
+  saveRDS(salinity_gam, 'models/salinity_gam.rds')
+  print(tm)
+  rm(tm)
+} else {
+  salinity_gam <- readRDS('models/salinity_gam.rds')
+}
+```
+
+```{r}
+summary(salinity_gam$gam)
+```
+
+```{r}
+plot(Salinity_gam$gam)
+```
+
+```{r}
+rm(salinity_gam)
+```
+
+
+
+## Percent Saturation
+```{r gamm_pctsat, cache = TRUE} 
+if (! file.exists('models/pctsat_gam.rds')) {
+tm <- system.time(pctsat_gam <- gamm(pctsat_dev ~  s(hour, by = season, bs='cc', k=6),
+                 correlation = corAR1(form = ~ 1 | season),  # we run out of memory if we don't use a grouping
+                 data = dev_data))
+  saveRDS(pctsat_gam, 'models/pctsat_gam.rds')
+  print(tm)
+  rm(tm)
+} else {
+  pctsat_gam <- readRDS('models/pctsat_gam.rds')
+}
+```
+
+```{r}
+summary(pctsat_gam$gam)
+```
+
+```{r}
+plot(pctsat_gam$gam)
+```
+
+```{r}
+rm(pctsat_gam)
+```
+
+
+## pH
+```{r gamm_ph, cache = TRUE} 
+if (! file.exists('models/ph_gam.rds')) {
+tm <- system.time(ph_gam <- gamm(ph_dev ~  s(hour, by = season, bs='cc', k=6),
+                 correlation = corAR1(form = ~ 1 | season),  # we run out of memory if we don't use a grouping
+                 data = dev_data))
+  saveRDS(ph_gam, 'models/ph_gam.rds')
+  print(tm)
+  rm(tm)
+} else {
+  ph_gam <- readRDS('models/ph_gam.rds')
+}
+```
+
+```{r}
+summary(ph_gam$gam)
+```
+
+```{r}
+plot(ph_gam$gam)
+```
+
+```{r}
+rm(ph_gam)
+```
+
+## Chlorophyll (Transformed)
+```{r gamm_chl_log1, cache = TRUE} 
+if (! file.exists('models/chl_log1_gam.rds')) {
+tm <- system.time(chl_log1_gam <- gamm(chl_log1_dev ~  s(hour, by = season, bs='cc', k=6),
+                 correlation = corAR1(form = ~ 1 | season),  # we run out of memory if we don't use a grouping
+                 data = dev_data))
+  saveRDS(chl_log1_gam, 'models/chl_log1_gam.rds')
+  print(tm)
+  rm(tm)
+} else {
+  chl_log1_gam <- readRDS('models/chl_log1_gam.rds')
+}
+```
+
+```{r}
+summary(chl_log1_gam$gam)
+```
+
+```{r}
+plot(chl_log1_gam$gam)
+```
+
+
+
+```{r}
+rm(chl_log1_gam)
+```
+
+
+So, what we see:  
+*   On the order of 1/2 degree C fluctuations in water temperature with day
+    during summer, lower levels of fluctuations at other times of year.
+*   Close to 15% fluctuation in percent saturation over summer days, with
+    minimum percent saturation at dawn, maximum in late afternoon.
+*   Similar fluctuations in pH, although the total swing is less than 1/10th of
+    a pH point.

@@ -18,7 +18,7 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
 -   [Exploratory Graphics](#exploratory-graphics)
 -   [Hierarchical Linear Models](#hierarchical-linear-models)
     -   [Review ANOVAs](#review-anovas)
-    -   [500 Meter IC](#meter-ic)
+    -   [500 Meter IC](#500-meter-ic)
         -   [Total Percentage of Nearby
             IC](#total-percentage-of-nearby-ic)
         -   [Percent Imperviousness on Nearby
@@ -53,11 +53,16 @@ archives.
 
 ``` r
 library(tidyverse)
-#> -- Attaching packages --------------------------------------- tidyverse 1.3.0 --
+#> Warning: package 'tidyverse' was built under R version 4.0.5
+#> -- Attaching packages --------------------------------------- tidyverse 1.3.1 --
 #> v ggplot2 3.3.3     v purrr   0.3.4
-#> v tibble  3.0.5     v dplyr   1.0.3
-#> v tidyr   1.1.2     v stringr 1.4.0
-#> v readr   1.4.0     v forcats 0.5.0
+#> v tibble  3.1.1     v dplyr   1.0.5
+#> v tidyr   1.1.3     v stringr 1.4.0
+#> v readr   1.4.0     v forcats 0.5.1
+#> Warning: package 'tibble' was built under R version 4.0.5
+#> Warning: package 'tidyr' was built under R version 4.0.5
+#> Warning: package 'dplyr' was built under R version 4.0.5
+#> Warning: package 'forcats' was built under R version 4.0.5
 #> -- Conflicts ------------------------------------------ tidyverse_conflicts() --
 #> x dplyr::filter() masks stats::filter()
 #> x dplyr::lag()    masks stats::lag()
@@ -71,17 +76,12 @@ library(lme4)
 #> The following objects are masked from 'package:tidyr':
 #> 
 #>     expand, pack, unpack
-#library(mgcv)
-#library(maxLik)
 
 library(GGally)
+#> Warning: package 'GGally' was built under R version 4.0.5
 #> Registered S3 method overwritten by 'GGally':
 #>   method from   
 #>   +.gg   ggplot2
-#library(zoo)
-#library(lubridate)  # here, for the make_datetime() function
-
-library(broom)
 
 library(CBEPgraphics)
 load_cbep_fonts()
@@ -193,9 +193,8 @@ the_data <- the_data %>%
          bottom_flag = secchi == "BSV") %>%
   relocate(secchi_2, .after = secchi) %>%
   relocate(bottom_flag, .after = secchi_2)
-#> Warning: Problem with `mutate()` input `secchi_2`.
-#> i NAs introduced by coercion
-#> i Input `secchi_2` is `if_else(secchi == "BSV", water_depth, as.numeric(secchi))`.
+#> Warning in replace_with(out, !condition, false, fmt_args(~false), glue("length
+#> of {fmt_args(~condition)}")): NAs introduced by coercion
 ```
 
 ## Create Recent Data
