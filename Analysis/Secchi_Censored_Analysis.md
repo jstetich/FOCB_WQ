@@ -45,17 +45,23 @@ clear enough to see the disk that far down.
 
 ``` r
 library(tidyverse)
-#> -- Attaching packages --------------------------------------- tidyverse 1.3.0 --
+#> Warning: package 'tidyverse' was built under R version 4.0.5
+#> -- Attaching packages --------------------------------------- tidyverse 1.3.1 --
 #> v ggplot2 3.3.3     v purrr   0.3.4
-#> v tibble  3.0.5     v dplyr   1.0.3
-#> v tidyr   1.1.2     v stringr 1.4.0
-#> v readr   1.4.0     v forcats 0.5.0
+#> v tibble  3.1.1     v dplyr   1.0.5
+#> v tidyr   1.1.3     v stringr 1.4.0
+#> v readr   1.4.0     v forcats 0.5.1
+#> Warning: package 'tibble' was built under R version 4.0.5
+#> Warning: package 'tidyr' was built under R version 4.0.5
+#> Warning: package 'dplyr' was built under R version 4.0.5
+#> Warning: package 'forcats' was built under R version 4.0.5
 #> -- Conflicts ------------------------------------------ tidyverse_conflicts() --
 #> x dplyr::filter() masks stats::filter()
 #> x dplyr::lag()    masks stats::lag()
 library(readxl)
 
 library(maxLik)
+#> Warning: package 'maxLik' was built under R version 4.0.5
 #> Loading required package: miscTools
 #> 
 #> Please cite the 'maxLik' package as:
@@ -63,11 +69,6 @@ library(maxLik)
 #> 
 #> If you have questions, suggestions, or comments regarding the 'maxLik' package, please use a forum or 'tracker' at maxLik's R-Forge site:
 #> https://r-forge.r-project.org/projects/maxlik/
-
-library(GGally)
-#> Registered S3 method overwritten by 'GGally':
-#>   method from   
-#>   +.gg   ggplot2
 
 library(CBEPgraphics)
 load_cbep_fonts()
@@ -141,9 +142,8 @@ the_data <- the_data %>%
   filter(! is.na(secchi)) %>%
   relocate(secchi_2, .after = secchi) %>%
   relocate(bottom_flag, .after = secchi_2)
-#> Warning: Problem with `mutate()` input `secchi_2`.
-#> i NAs introduced by coercion
-#> i Input `secchi_2` is `if_else(secchi == "BSV", water_depth, as.numeric(secchi))`.
+#> Warning in replace_with(out, !condition, false, fmt_args(~false), glue("length
+#> of {fmt_args(~condition)}")): NAs introduced by coercion
 ```
 
 ## Create Recent Data

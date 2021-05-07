@@ -34,23 +34,8 @@ We look at minimum and low quantile salinity from the recent monitoring record.
 
 # Load Libraries
 ```{r load_libraries}
-library(MASS)     # Here for the `boxcox()` function
 library(tidyverse)
 library(readxl)
-#library(readr)
-
-library(mgcv)     # For `gam()` and `gamm()` models
-#library(maxLik)
-library(lme4)    # For mixed effectws models
-#library(nlme)   # probably only needed if we need to model autocorrelation
-
-library(emmeans)
-
-library(GGally)
-#library(zoo)
-#library(lubridate)  # here, for the make_datetime() function
-
-#library(broom)
 
 library(CBEPgraphics)
 load_cbep_fonts()

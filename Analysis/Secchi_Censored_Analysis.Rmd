@@ -39,8 +39,6 @@ library(readxl)
 
 library(maxLik)
 
-library(GGally)
-
 library(CBEPgraphics)
 load_cbep_fonts()
 theme_set(theme_cbep())

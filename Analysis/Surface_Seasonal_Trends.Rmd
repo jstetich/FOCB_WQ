@@ -42,7 +42,6 @@ library(tidyverse)
 library(readxl)
 
 library(mgcv)     # For `gam()` and `gamm()` models
-library(lmerTest)     # for `lmer()`
 library(emmeans)
 
 library(CBEPgraphics)

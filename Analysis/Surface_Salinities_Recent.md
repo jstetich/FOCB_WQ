@@ -48,58 +48,21 @@ record.
 # Load Libraries
 
 ``` r
-library(MASS)     # Here for the `boxcox()` function
 library(tidyverse)
-#> -- Attaching packages --------------------------------------- tidyverse 1.3.0 --
+#> Warning: package 'tidyverse' was built under R version 4.0.5
+#> -- Attaching packages --------------------------------------- tidyverse 1.3.1 --
 #> v ggplot2 3.3.3     v purrr   0.3.4
-#> v tibble  3.0.5     v dplyr   1.0.3
-#> v tidyr   1.1.2     v stringr 1.4.0
-#> v readr   1.4.0     v forcats 0.5.0
+#> v tibble  3.1.1     v dplyr   1.0.5
+#> v tidyr   1.1.3     v stringr 1.4.0
+#> v readr   1.4.0     v forcats 0.5.1
+#> Warning: package 'tibble' was built under R version 4.0.5
+#> Warning: package 'tidyr' was built under R version 4.0.5
+#> Warning: package 'dplyr' was built under R version 4.0.5
+#> Warning: package 'forcats' was built under R version 4.0.5
 #> -- Conflicts ------------------------------------------ tidyverse_conflicts() --
 #> x dplyr::filter() masks stats::filter()
 #> x dplyr::lag()    masks stats::lag()
-#> x dplyr::select() masks MASS::select()
 library(readxl)
-#library(readr)
-
-library(mgcv)     # For `gam()` and `gamm()` models
-#> Loading required package: nlme
-#> 
-#> Attaching package: 'nlme'
-#> The following object is masked from 'package:dplyr':
-#> 
-#>     collapse
-#> This is mgcv 1.8-33. For overview type 'help("mgcv-package")'.
-#library(maxLik)
-library(lme4)    # For mixed effectws models
-#> Loading required package: Matrix
-#> 
-#> Attaching package: 'Matrix'
-#> The following objects are masked from 'package:tidyr':
-#> 
-#>     expand, pack, unpack
-#> 
-#> Attaching package: 'lme4'
-#> The following object is masked from 'package:nlme':
-#> 
-#>     lmList
-#library(nlme)   # probably only needed if we need to model autocorrelation
-
-library(emmeans)
-
-library(GGally)
-#> Registered S3 method overwritten by 'GGally':
-#>   method from   
-#>   +.gg   ggplot2
-#> 
-#> Attaching package: 'GGally'
-#> The following object is masked from 'package:emmeans':
-#> 
-#>     pigs
-#library(zoo)
-#library(lubridate)  # here, for the make_datetime() function
-
-#library(broom)
 
 library(CBEPgraphics)
 load_cbep_fonts()

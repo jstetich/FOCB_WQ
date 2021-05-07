@@ -43,13 +43,11 @@ Analyses in OTHER GitHub archived look into the following:
 ```{r, load_libraries}
 library(tidyverse)
 library(readxl)
-#library(readr)
 
 library(GGally)
-#library(zoo)
 library(lubridate)  # here, for the make_datetime() function
 
-library(colorspace)
+library(colorspace)  #for scale_color_continuous_diverging(palette = 'Cork'...) possibly others, 
 
 library(CBEPgraphics)
 load_cbep_fonts()

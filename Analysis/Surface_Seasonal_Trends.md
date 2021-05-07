@@ -59,46 +59,30 @@ only for that version.
 
 ``` r
 library(tidyverse)
-#> -- Attaching packages --------------------------------------- tidyverse 1.3.0 --
+#> Warning: package 'tidyverse' was built under R version 4.0.5
+#> -- Attaching packages --------------------------------------- tidyverse 1.3.1 --
 #> v ggplot2 3.3.3     v purrr   0.3.4
-#> v tibble  3.0.5     v dplyr   1.0.3
-#> v tidyr   1.1.2     v stringr 1.4.0
-#> v readr   1.4.0     v forcats 0.5.0
+#> v tibble  3.1.1     v dplyr   1.0.5
+#> v tidyr   1.1.3     v stringr 1.4.0
+#> v readr   1.4.0     v forcats 0.5.1
+#> Warning: package 'tibble' was built under R version 4.0.5
+#> Warning: package 'tidyr' was built under R version 4.0.5
+#> Warning: package 'dplyr' was built under R version 4.0.5
+#> Warning: package 'forcats' was built under R version 4.0.5
 #> -- Conflicts ------------------------------------------ tidyverse_conflicts() --
 #> x dplyr::filter() masks stats::filter()
 #> x dplyr::lag()    masks stats::lag()
 library(readxl)
 
 library(mgcv)     # For `gam()` and `gamm()` models
+#> Warning: package 'mgcv' was built under R version 4.0.5
 #> Loading required package: nlme
 #> 
 #> Attaching package: 'nlme'
 #> The following object is masked from 'package:dplyr':
 #> 
 #>     collapse
-#> This is mgcv 1.8-33. For overview type 'help("mgcv-package")'.
-library(lmerTest)     # for `lmer()`
-#> Warning: package 'lmerTest' was built under R version 4.0.4
-#> Loading required package: lme4
-#> Loading required package: Matrix
-#> 
-#> Attaching package: 'Matrix'
-#> The following objects are masked from 'package:tidyr':
-#> 
-#>     expand, pack, unpack
-#> 
-#> Attaching package: 'lme4'
-#> The following object is masked from 'package:nlme':
-#> 
-#>     lmList
-#> 
-#> Attaching package: 'lmerTest'
-#> The following object is masked from 'package:lme4':
-#> 
-#>     lmer
-#> The following object is masked from 'package:stats':
-#> 
-#>     step
+#> This is mgcv 1.8-35. For overview type 'help("mgcv-package")'.
 library(emmeans)
 
 library(CBEPgraphics)
@@ -172,9 +156,8 @@ the_data <- the_data %>%
          bottom_flag = secchi == "BSV") %>%
   relocate(secchi_2, .after = secchi) %>%
   relocate(bottom_flag, .after = secchi_2)
-#> Warning: Problem with `mutate()` input `secchi_2`.
-#> i NAs introduced by coercion
-#> i Input `secchi_2` is `if_else(secchi == "BSV", water_depth, as.numeric(secchi))`.
+#> Warning in replace_with(out, !condition, false, fmt_args(~false), glue("length
+#> of {fmt_args(~condition)}")): NAs introduced by coercion
 ```
 
 ### Limit Chlorophyll to Three Long-Term Stations
@@ -1228,7 +1211,7 @@ row <- nested_data[nested_data$parameter == 'chl',]
     xlim(1993, 2020) +
     scale_y_continuous(trans = 'log1p', breaks = c(0,1,  5, 10, 50, 100, 200))
   print(plt)
-#> Warning: Removed 14 rows containing missing values (geom_point).
+#> Warning: Removed 9 rows containing missing values (geom_point).
 ```
 
 <img src="Surface_Seasonal_Trends_files/figure-gfm/fix_chl_plot-1.png" style="display: block; margin: auto;" />
