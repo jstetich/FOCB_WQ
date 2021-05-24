@@ -804,6 +804,24 @@ ggsave('figures/cms_do_temp.pdf', device = cairo_pdf,
         width = 5, height = 4)
 ```
 
+
+```{r, cross_plot_do_t_2, width = 5, height = 4}
+plt <- cross_plot(the_data, temperature, do, color_parm = "Month",
+                            y_label = "Dissolved Oxygen (mg/l)", 
+                            x_label = "Temperature (°C)",
+                            alpha = 0.1,
+                            size = 0.5,
+                            add_smooth = FALSE,
+                            with_se = FALSE) +
+  guides(color = guide_legend(override.aes = list(alpha = 1, size = 3),
+                              byrow = TRUE,  nrow = 2))
+plt
+ggsave('figures/cms_do_temp_2.pdf', device = cairo_pdf, 
+        width = 5, height = 4)
+```
+
+
+
 #### Compare Daily Data
 ```{r, cross_plot_do_co2_daily}
 plt <- cross_plot(daily_data, temperature_med, do_med, color_parm = "Month",

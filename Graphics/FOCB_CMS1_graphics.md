@@ -74,10 +74,9 @@ library(tidyverse)
 #> Warning: package 'tidyverse' was built under R version 4.0.5
 #> -- Attaching packages --------------------------------------- tidyverse 1.3.1 --
 #> v ggplot2 3.3.3     v purrr   0.3.4
-#> v tibble  3.1.1     v dplyr   1.0.5
+#> v tibble  3.1.2     v dplyr   1.0.6
 #> v tidyr   1.1.3     v stringr 1.4.0
 #> v readr   1.4.0     v forcats 0.5.1
-#> Warning: package 'tibble' was built under R version 4.0.5
 #> Warning: package 'tidyr' was built under R version 4.0.5
 #> Warning: package 'dplyr' was built under R version 4.0.5
 #> Warning: package 'forcats' was built under R version 4.0.5
@@ -100,6 +99,7 @@ library(lubridate)  # here, for the make_datetime() function
 #>     date, intersect, setdiff, union
 
 library(colorspace)  #for scale_color_continuous_diverging(palette = 'Cork'...) possibly others, 
+#> Warning: package 'colorspace' was built under R version 4.0.5
 
 library(CBEPgraphics)
 load_cbep_fonts()
@@ -1026,6 +1026,28 @@ add_sum (plt, the_data, temperature, do, with_line = TRUE) +
 
 ``` r
 ggsave('figures/cms_do_temp.pdf', device = cairo_pdf, 
+        width = 5, height = 4)
+#> Warning: Removed 912 rows containing missing values (geom_point).
+```
+
+``` r
+plt <- cross_plot(the_data, temperature, do, color_parm = "Month",
+                            y_label = "Dissolved Oxygen (mg/l)", 
+                            x_label = "Temperature (°C)",
+                            alpha = 0.1,
+                            size = 0.5,
+                            add_smooth = FALSE,
+                            with_se = FALSE) +
+  guides(color = guide_legend(override.aes = list(alpha = 1, size = 3),
+                              byrow = TRUE,  nrow = 2))
+plt
+#> Warning: Removed 912 rows containing missing values (geom_point).
+```
+
+<img src="FOCB_CMS1_graphics_files/figure-gfm/cross_plot_do_t_2-1.png" style="display: block; margin: auto;" />
+
+``` r
+ggsave('figures/cms_do_temp_2.pdf', device = cairo_pdf, 
         width = 5, height = 4)
 #> Warning: Removed 912 rows containing missing values (geom_point).
 ```

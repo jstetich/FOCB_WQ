@@ -285,13 +285,13 @@ divisions, and provide "correct" labels, or we an identify "clean" labels, and
 place our tick marks at those values.
 
 ##### "Clean" Tick Values
-```{r}
+```{r make_ticks}
 a <- c(0, 2.5, 10 , 25 ,100)
 log(a +1)
 ```
 
 #### Create Functions
-```{r}
+```{r make_funs}
 prefered_breaks =  c(0, 1, 5, 10, 50)
 
 my_breaks_fxn <- function(lims) {
@@ -402,8 +402,8 @@ p_vio +
                labeller = labeller(parm = labs))
 
 
-ggsave('figures/surface_6_violin.pdf', device = cairo_pdf,
-       width = 7, height = 7)
+#ggsave('figures/surface_6_violin.pdf', device = cairo_pdf,
+#       width = 7, height = 7)
 ```
 
 ## Bar Chart
@@ -413,7 +413,7 @@ outliers, and only show medians and the interquartile range.
 But note that our Breaks function no longer works, as the limits for the Secchi 
 depth and limits for (untransformed) chlorophyll now overlap.
 
-```{r}
+```{r new_break_fun}
 my_breaks_fxn_2 <- function(lims) {
   #browser()
   if(max(lims) < 3) {
@@ -458,7 +458,7 @@ facet_wrap(~parm, nrow = 3,
                scale = 'free_y',
                labeller = labeller(parm = labs))
 
-ggsave('figures/surface_6_bar.pdf', device = cairo_pdf, width = 7, height = 7)
+#ggsave('figures/surface_6_bar.pdf', device = cairo_pdf, width = 7, height = 7)
 ```
 
 The revised Bar chart is ALMOST right, but it suffers because the bar chart
@@ -533,7 +533,7 @@ bar_plot <- function(.data, .label, .units, .min = NA, .max = NA) {
 ```
 
 ## Automating Limits
-```{r}
+```{r make_lims_df}
 my_lims <- tribble( ~parm, ~minim, ~maxim,
                    "secchi_2",     NA, NA,
                    "temperature",   10, NA,
@@ -564,7 +564,7 @@ for (p in c('temperature', 'salinity', 'do',
   
  print(bar_plot(dat, label, unit, the_min, the_max))
  fn <- paste0('bar_chart_', p, '.pdf')
- ggsave(file.path('figures',fn), device = cairo_pdf, width = 3.5, height = 3.5)
+ #ggsave(file.path('figures',fn), device = cairo_pdf, width = 3.5, height = 3.5)
 }
 ```
 While those plots look similar, the width of the core plot is not identical, as
@@ -584,6 +584,6 @@ p <- ggplot(recent_data, aes(temperature, do)) +
   ylab('Dissolved Oxygen (mg/l)') +
   theme_cbep(base_size = 12)
 p
-ggsave('figures/do_temp.pdf', device = cairo_pdf, width = 4, height = 3)
+#ggsave('figures/do_temp.pdf', device = cairo_pdf, width = 4, height = 3)
 ```
 

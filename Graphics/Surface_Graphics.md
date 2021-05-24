@@ -28,7 +28,7 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
     -   [Revised Bar Chart Function](#revised-bar-chart-function)
     -   [Automating Limits](#automating-limits)
     -   [All Bar Plots](#all-bar-plots)
--   [Temperature / DO Graph](#temperature-do-graph)
+-   [Temperature / DO Graph](#temperature--do-graph)
 
 <img
     src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
@@ -70,11 +70,15 @@ chlorophyll axes into facet plots, which we use her and in the companion
 
 ``` r
 library(tidyverse)
-#> -- Attaching packages --------------------------------------- tidyverse 1.3.0 --
+#> Warning: package 'tidyverse' was built under R version 4.0.5
+#> -- Attaching packages --------------------------------------- tidyverse 1.3.1 --
 #> v ggplot2 3.3.3     v purrr   0.3.4
-#> v tibble  3.0.5     v dplyr   1.0.3
-#> v tidyr   1.1.2     v stringr 1.4.0
-#> v readr   1.4.0     v forcats 0.5.0
+#> v tibble  3.1.2     v dplyr   1.0.6
+#> v tidyr   1.1.3     v stringr 1.4.0
+#> v readr   1.4.0     v forcats 0.5.1
+#> Warning: package 'tidyr' was built under R version 4.0.5
+#> Warning: package 'dplyr' was built under R version 4.0.5
+#> Warning: package 'forcats' was built under R version 4.0.5
 #> -- Conflicts ------------------------------------------ tidyverse_conflicts() --
 #> x dplyr::filter() masks stats::filter()
 #> x dplyr::lag()    masks stats::lag()
@@ -168,9 +172,8 @@ the_data <- the_data %>%
          bottom_flag = secchi == "BSV") %>%
   relocate(secchi_2, .after = secchi) %>%
   relocate(bottom_flag, .after = sample_depth)  # we want an ID column
-#> Warning: Problem with `mutate()` input `secchi_2`.
-#> i NAs introduced by coercion
-#> i Input `secchi_2` is `if_else(secchi == "BSV", water_depth, as.numeric(secchi))`.
+#> Warning in replace_with(out, !condition, false, fmt_args(~false), glue("length
+#> of {fmt_args(~condition)}")): NAs introduced by coercion
 ```
 
 Warnings are caused because some entries in Secchi that could not be
@@ -486,19 +489,8 @@ p_vio +
 
 ``` r
 
-ggsave('figures/surface_6_violin.pdf', device = cairo_pdf,
-       width = 7, height = 7)
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
-
-#> Warning: position_dodge requires non-overlapping x intervals
+#ggsave('figures/surface_6_violin.pdf', device = cairo_pdf,
+#       width = 7, height = 7)
 ```
 
 ## Bar Chart
@@ -557,7 +549,7 @@ facet_wrap(~parm, nrow = 3,
 <img src="Surface_Graphics_files/figure-gfm/bar_wide-1.png" style="display: block; margin: auto;" />
 
 ``` r
-ggsave('figures/surface_6_bar.pdf', device = cairo_pdf, width = 7, height = 7)
+#ggsave('figures/surface_6_bar.pdf', device = cairo_pdf, width = 7, height = 7)
 ```
 
 The revised Bar chart is ALMOST right, but it suffers because the bar
@@ -669,13 +661,11 @@ for (p in c('temperature', 'salinity', 'do',
   
  print(bar_plot(dat, label, unit, the_min, the_max))
  fn <- paste0('bar_chart_', p, '.pdf')
- ggsave(file.path('figures',fn), device = cairo_pdf, width = 3.5, height = 3.5)
+ #ggsave(file.path('figures',fn), device = cairo_pdf, width = 3.5, height = 3.5)
 }
 ```
 
 <img src="Surface_Graphics_files/figure-gfm/all_bars_2-1.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/all_bars_2-2.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/all_bars_2-3.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/all_bars_2-4.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/all_bars_2-5.png" style="display: block; margin: auto;" />
-
-    #> Warning: Removed 1 rows containing non-finite values (stat_summary).
 
     #> Warning: Removed 1 rows containing non-finite values (stat_summary).
 
@@ -704,6 +694,5 @@ p
 <img src="Surface_Graphics_files/figure-gfm/temp_do_graph-1.png" style="display: block; margin: auto;" />
 
 ``` r
-ggsave('figures/do_temp.pdf', device = cairo_pdf, width = 4, height = 3)
-#> Warning: Removed 19 rows containing missing values (geom_point).
+#ggsave('figures/do_temp.pdf', device = cairo_pdf, width = 4, height = 3)
 ```

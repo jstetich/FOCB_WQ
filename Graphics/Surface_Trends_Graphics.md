@@ -23,7 +23,7 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
         -   [ANOVAs](#anovas)
         -   [Compare Slopes](#compare-slopes)
     -   [Deriving Annotations from general
-        results.](#deriving-annotations-from-general-results.)
+        results.](#deriving-annotations-from-general-results)
     -   [Marginal Means](#marginal-means)
         -   [Limit Forecasts Chlorophyll](#limit-forecasts-chlorophyll)
 -   [Part 3: Graphics](#part-3-graphics)
@@ -66,28 +66,33 @@ overall trends.
 
 ``` r
 library(tidyverse)
-#> -- Attaching packages --------------------------------------- tidyverse 1.3.0 --
+#> Warning: package 'tidyverse' was built under R version 4.0.5
+#> -- Attaching packages --------------------------------------- tidyverse 1.3.1 --
 #> v ggplot2 3.3.3     v purrr   0.3.4
-#> v tibble  3.0.5     v dplyr   1.0.3
-#> v tidyr   1.1.2     v stringr 1.4.0
-#> v readr   1.4.0     v forcats 0.5.0
+#> v tibble  3.1.2     v dplyr   1.0.6
+#> v tidyr   1.1.3     v stringr 1.4.0
+#> v readr   1.4.0     v forcats 0.5.1
+#> Warning: package 'tidyr' was built under R version 4.0.5
+#> Warning: package 'dplyr' was built under R version 4.0.5
+#> Warning: package 'forcats' was built under R version 4.0.5
 #> -- Conflicts ------------------------------------------ tidyverse_conflicts() --
 #> x dplyr::filter() masks stats::filter()
 #> x dplyr::lag()    masks stats::lag()
 library(readxl)
 
 library(mgcv)     # For `gam()` models, used here for hierarchical models
+#> Warning: package 'mgcv' was built under R version 4.0.5
 #> Loading required package: nlme
 #> 
 #> Attaching package: 'nlme'
 #> The following object is masked from 'package:dplyr':
 #> 
 #>     collapse
-#> This is mgcv 1.8-33. For overview type 'help("mgcv-package")'.
+#> This is mgcv 1.8-35. For overview type 'help("mgcv-package")'.
 library(emmeans)
 
 library(ggpmisc)  # Allows absolute positioning of annotations and text
-#> Warning: package 'ggpmisc' was built under R version 4.0.4
+#> Warning: package 'ggpmisc' was built under R version 4.0.5
 #> 
 #> Attaching package: 'ggpmisc'
 #> The following object is masked from 'package:ggplot2':
@@ -162,9 +167,8 @@ the_data <- the_data %>%
          bottom_flag = secchi == "BSV") %>%
   relocate(secchi_2, .after = secchi) %>%
   relocate(bottom_flag, .after = year)
-#> Warning: Problem with `mutate()` input `secchi_2`.
-#> i NAs introduced by coercion
-#> i Input `secchi_2` is `if_else(secchi == "BSV", water_depth, as.numeric(secchi))`.
+#> Warning in replace_with(out, !condition, false, fmt_args(~false), glue("length
+#> of {fmt_args(~condition)}")): NAs introduced by coercion
 ```
 
 ### Limit Chlorophyll to Three Long-Term Stations
@@ -701,7 +705,7 @@ p <- ggplot(data_sel, aes(x = year, y = value)) +
 p
 ```
 
-<img src="Surface_Trends_Graphics_files/figure-gfm/unnamed-chunk-4-1.png" style="display: block; margin: auto;" />
+<img src="Surface_Trends_Graphics_files/figure-gfm/draft_graphic-1.png" style="display: block; margin: auto;" />
 
 ### Fixing the Chlorophyll Y Axis
 
@@ -897,6 +901,23 @@ ggsave('figures/wq_trends_six_wide_no_symb.pdf',
        device = cairo_pdf, width = 7, height = 7)
 ```
 
+``` r
+p_jit +
+  facet_wrap(~parm, nrow = 6,
+               scale = 'free_y',
+               labeller = labeller(parm = labs)) +
+  geom_text_npc(data = annot, 
+            mapping = aes(npcx = ann_xloc, npcy = ann_yloc, label = annot),
+            hjust = 'inward',
+            size = 3.25)
+```
+
+<img src="Surface_Trends_Graphics_files/figure-gfm/jitter_long_annot-1.png" style="display: block; margin: auto;" />
+
+``` r
+ggsave('figures/wq_trends_six_long_no_sym.pdf', device = cairo_pdf, width = 3.5, height = 9.5)
+```
+
 ### Add Symbols
 
 In the upper left, we want to offer symbols to signal improving or
@@ -957,8 +978,7 @@ p_jit +
 
 ``` r
 
-ggsave('figures/wq_trends_six_wide.pdf', device = cairo_pdf, width = 7, height = 7)
-#> Warning: Removed 3 rows containing missing values (geom_text_npc).
+#ggsave('figures/wq_trends_six_wide.pdf', device = cairo_pdf, width = 7, height = 7)
 ```
 
 ``` r
@@ -981,8 +1001,7 @@ p_jit +
 
 ``` r
 
-ggsave('figures/wq_trends_six_long.pdf', device = cairo_pdf, width = 3.5, height = 9.5)
-#> Warning: Removed 3 rows containing missing values (geom_text_npc).
+#ggsave('figures/wq_trends_six_long.pdf', device = cairo_pdf, width = 3.5, height = 9.5)
 ```
 
 ## Separate Graphics
@@ -1028,4 +1047,4 @@ for (pp in levels(data_sel$parm)) {
 }
 ```
 
-<img src="Surface_Trends_Graphics_files/figure-gfm/unnamed-chunk-7-1.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/unnamed-chunk-7-2.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/unnamed-chunk-7-3.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/unnamed-chunk-7-4.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/unnamed-chunk-7-5.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/unnamed-chunk-7-6.png" style="display: block; margin: auto;" />
+<img src="Surface_Trends_Graphics_files/figure-gfm/separate_graphics-1.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/separate_graphics-2.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/separate_graphics-3.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/separate_graphics-4.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/separate_graphics-5.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/separate_graphics-6.png" style="display: block; margin: auto;" />

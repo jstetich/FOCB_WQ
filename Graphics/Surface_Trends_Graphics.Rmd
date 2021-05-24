@@ -118,7 +118,7 @@ the_data <- the_data %>%
 ### Select Parameters
 We will plot  six parameters, omitting percent saturation, and plotting
 chlorophyll on a transformed y axis.
-```{r}
+```{r select_parms}
 the_data <- the_data %>%
   select(-chl, -pctsat)
 ```
@@ -311,7 +311,7 @@ The code we just ran generated "predictions" for chlorophyll for years in which
 we actually have no chlorophyll data.  We could run `emmip()` again, but it is
 also easy to simply select the right rows from the existing predictions.
 
-```{r}
+```{r trim_chl_years}
 row <- nested_data[nested_data$parm == 'chl_log1p',]
 preds <- row$emmi_3[[1]]
 preds <- preds %>% filter(year > 2000)
@@ -334,7 +334,7 @@ That means we will assemble facet graphics from two data frames, one of data,
 and one of predictions.
 
 ### Data Set up
-```{r}
+```{r build_df}
 list_df <- nested_data$data
 names(list_df) <-  nested_data$parm
 data_sel <- bind_rows(list_df, .id = 'parm') %>%
@@ -365,7 +365,7 @@ cbind(labs)
 ```
 
 ### Draft Graphic
-```{r, fig.height = 7, fig.width = 7}
+```{r draft_graphic, fig.height = 7, fig.width = 7}
 p <- ggplot(data_sel, aes(x = year, y = value)) +
     geom_jitter(aes(color = season_3), width = 0.3, height = 0, 
                 alpha = 0.1) +
@@ -439,7 +439,7 @@ specific breaks, and if so, set the labels appropriately.  It's slightly
 trickier than that, but that is the basic concept.
 
 #### Create Breaks Function
-```{r}
+```{r breaks_fn}
 preferred_breaks =  c(0, 1,  5, 10, 50)
 
 my_breaks_fxn <- function(lims) {
@@ -461,7 +461,7 @@ my_breaks_fxn <- function(lims) {
 We are cheating a bit here by plotting transformed data, but providing
 **labels** that are back transformed.  That work is conducted by the labeling
 function.
-```{r}
+```{r label_fxn}
 my_label_fxn <- function(brks) {
   # frequently, brks contians NA in place of one or more 
   # of the candidate brks, even after we pass a vector of specific breaks.
@@ -567,7 +567,19 @@ ggsave('figures/wq_trends_six_wide_no_symb.pdf',
        device = cairo_pdf, width = 7, height = 7)
 
 ```
+  
+```{r jitter_long_annot, fig.height = 9.5, fig.width = 3.5}
+p_jit +
+  facet_wrap(~parm, nrow = 6,
+               scale = 'free_y',
+               labeller = labeller(parm = labs)) +
+  geom_text_npc(data = annot, 
+            mapping = aes(npcx = ann_xloc, npcy = ann_yloc, label = annot),
+            hjust = 'inward',
+            size = 3.25)
 
+ggsave('figures/wq_trends_six_long_no_sym.pdf', device = cairo_pdf, width = 3.5, height = 9.5)
+```
 
 ### Add Symbols
 In the upper left, we want to offer symbols to signal improving or worsening
@@ -612,7 +624,7 @@ p_jit +
                 color = c('red3', 'grey', 'grey', 'grey', 'red3', 'green2'))
 
 
-ggsave('figures/wq_trends_six_wide.pdf', device = cairo_pdf, width = 7, height = 7)
+#ggsave('figures/wq_trends_six_wide.pdf', device = cairo_pdf, width = 7, height = 7)
 ```
   
   
@@ -631,11 +643,11 @@ p_jit +
                 color = c('red3', 'grey', 'grey', 'grey', 'red3', 'green2'))
 
 
-ggsave('figures/wq_trends_six_long.pdf', device = cairo_pdf, width = 3.5, height = 9.5)
+#ggsave('figures/wq_trends_six_long.pdf', device = cairo_pdf, width = 3.5, height = 9.5)
 ```
   
 ## Separate Graphics
-```{r, fig.height = 3, fig.width = 5}
+```{r separate_graphics, fig.height = 3, fig.width = 5}
 for (pp in levels(data_sel$parm)) {
   dat <- data_sel %>%
     filter(parm == pp)
