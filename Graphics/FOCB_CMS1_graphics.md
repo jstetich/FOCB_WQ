@@ -825,6 +825,13 @@ long_data %>%
   filter(Parameter %in% c("temperature", 'salinity', 'do', 'chl_log1')) %>%
   mutate(Parameter = factor(Parameter, 
                             levels =  c("temperature", 'salinity', 'do', 'chl_log1'))) %>%
+  mutate(Parameter4 = factor(Parameter, 
+                        levels =  c("temperature", 'salinity', 
+                                        'do', 'chl_log1'),
+                        labels = c(expression("Temperature (" * degree * "C)"), 
+                                  expression('Salinity' ~ '(PSU)'), 
+                                  expression('Dissolved' ~ 'Oxygen' ~ '(mg/l)'),
+                                  expression('Chlorophyll A (' * mu * 'g/l)')))) %>%
   full_profile(parm = Value, dt = 'dt', color = 'hour', alpha = 1,
                label = '', color_label = 'Hour of the Day') +
   #geom_hline(data = href, mapping = aes(yintercept = val),
@@ -841,8 +848,8 @@ long_data %>%
                                    breaks = c(0,3,6, 9, 12,15,18, 21),
                                    name = 'Hour of the Day') +
   
-  facet_wrap(~ Parameter, nrow = 2, scales = 'free_y',
-             labeller = labeller(Parameter = facet.labs) )
+  facet_wrap(~ Parameter4, nrow = 2, scales = 'free_y',
+             labeller = label_parsed)
 #> Scale for 'colour' is already present. Adding another scale for 'colour',
 #> which will replace the existing scale.
 #> Warning: Removed 2745 rows containing missing values (geom_point).
@@ -944,16 +951,16 @@ season_profile(the_data, chl_log1, doy, alpha = 0.5,
 ### Joint Plot
 
 ``` r
-facet.labs <-         c("Temperature (°C)", 'Salinity (PSU)', 'Dissolved Oxygen (mg/l)', 
-                        'Chlorophyll A (mg/l)')
-names(facet.labs) <-  c("temperature", 'salinity', 'do', 'chl_log1')
-
-
 long_data %>%
   filter(Parameter %in% c("temperature", 'salinity', 'do', 'chl_log1')) %>%
   mutate(Parameter = factor(Parameter, 
                             levels =  c("temperature", 'salinity', 'do', 'chl_log1'))) %>%
-  
+  mutate(Parameter4 = factor(Parameter, 
+                            levels =  c("temperature", 'salinity', 'do', 'chl_log1'),
+                            labels = c(expression("Temperature (" * degree * "C)"), 
+                                       expression('Salinity' ~ '(PSU)'), 
+                                       expression('Dissolved' ~ 'Oxygen' ~ '(mg/l)'),
+                                       expression('Chlorophyll A (' * mu * 'g/l)')))) %>%
   season_profile(Value, doy = 'doy',
                 size = .5, alpha = 0.25,
                 label = '',
@@ -963,8 +970,8 @@ long_data %>%
   
   scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
   
-  facet_wrap(~ Parameter, nrow = 2, scales = 'free_y',
-             labeller = labeller(Parameter = facet.labs) )
+  facet_wrap(~ Parameter4, nrow = 2, scales = 'free_y',
+             labeller = label_parsed)
 #> Warning: Removed 2745 rows containing missing values (geom_point).
 ```
 

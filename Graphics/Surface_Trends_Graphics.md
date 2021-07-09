@@ -29,7 +29,6 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
 -   [Part 3: Graphics](#part-3-graphics)
     -   [Facet Graphics](#facet-graphics)
         -   [Data Set up](#data-set-up)
-        -   [New Facet Labels](#new-facet-labels)
         -   [Draft Graphic](#draft-graphic)
         -   [Fixing the Chlorophyll Y
             Axis](#fixing-the-chlorophyll-y-axis)
@@ -81,14 +80,13 @@ library(tidyverse)
 library(readxl)
 
 library(mgcv)     # For `gam()` models, used here for hierarchical models
-#> Warning: package 'mgcv' was built under R version 4.0.5
 #> Loading required package: nlme
 #> 
 #> Attaching package: 'nlme'
 #> The following object is masked from 'package:dplyr':
 #> 
 #>     collapse
-#> This is mgcv 1.8-35. For overview type 'help("mgcv-package")'.
+#> This is mgcv 1.8-36. For overview type 'help("mgcv-package")'.
 library(emmeans)
 
 library(ggpmisc)  # Allows absolute positioning of annotations and text
@@ -240,7 +238,7 @@ units <- tibble(parm = c('temperature', 'salinity', 'do',
                 label = c("Temperature","Salinity", "Dissolved Oxygen",
                          "pH", "Secchi Depth", "Chlorophyll A"),
                 units = c(paste0("\U00B0", "C"),'PSU', 'mg/l','','m',
-                          'mg/l'))
+                          'ug/l'))
 
 nested_data <- trend_data %>%
   select(-dt, -time, -sample_depth, 
@@ -643,7 +641,25 @@ data_sel <- bind_rows(list_df, .id = 'parm') %>%
                           'pH', 'secchi_2', 'chl_log1p')) %>%
   mutate(parm = factor(parm,
                             levels = c('temperature', 'salinity', 'do', 
-                                       'pH', 'secchi_2', 'chl_log1p')))
+                                       'pH', 'secchi_2', 'chl_log1p'))) %>%
+  mutate(simple_lab = factor(parm,
+                            levels = c('temperature', 'salinity', 'do', 
+                                       'pH', 'secchi_2', 'chl_log1p'),
+                            labels = c("Temperature (°C)", 
+                                       'Salinity (PSU)', 
+                                       'Dissolved Oxygen (mg/l)',
+                                       'pH',
+                                       'Secchi Depth (m)',
+                                       'Chlorophyll A (ug/l)'))) %>%
+  mutate(full_lab = factor(parm, 
+                            levels =  c("temperature", 'salinity', 'do', 
+                                        'pH', 'secchi_2', 'chl_log1p'),
+                            labels = c(expression("Temperature (" * degree * "C)"), 
+                                       expression('Salinity' ~ '(PSU)'), 
+                                       expression('Dissolved' ~ 'Oxygen' ~ '(mg/l)'),
+                                       expression('pH'),
+                                       expression('Secchi' ~ 'Depth' ~ '(m)'),
+                                       expression('Chlorophyll A (' * mu * 'g/l)'))))
 
 list_df <- nested_data$emmi_3
 names(list_df) <-  nested_data$parm
@@ -652,25 +668,25 @@ predicts_sel <- bind_rows(list_df, .id = 'parm') %>%
                           'pH', 'secchi_2', 'chl_log1p')) %>%
   mutate(parm = factor(parm,
                             levels = c('temperature', 'salinity', 'do', 
-                                       'pH', 'secchi_2', 'chl_log1p')))
-```
-
-### New Facet Labels
-
-``` r
-labs <- paste0(nested_data$label, 
-                           if_else((! is.na(nested_data$units) & 
-                                      ! nchar(nested_data$units) == 0),
-                                       paste0(' (', nested_data$units, ')'), ''))
-names(labs) <- nested_data$parm
-cbind(labs)
-#>             labs                     
-#> secchi_2    "Secchi Depth (m)"       
-#> temperature "Temperature (°C)"       
-#> salinity    "Salinity (PSU)"         
-#> do          "Dissolved Oxygen (mg/l)"
-#> pH          "pH"                     
-#> chl_log1p   "Chlorophyll A (mg/l)"
+                                       'pH', 'secchi_2', 'chl_log1p'))) %>%
+  mutate(simple_lab = factor(parm,
+                            levels = c('temperature', 'salinity', 'do', 
+                                       'pH', 'secchi_2', 'chl_log1p'),
+                            labels = c("Temperature (°C)", 
+                                       'Salinity (PSU)', 
+                                       'Dissolved Oxygen (mg/l)',
+                                       'pH',
+                                       'Secchi Depth (m)',
+                                       'Chlorophyll A (ug/l)'))) %>%
+  mutate(full_lab = factor(parm, 
+                            levels =  c("temperature", 'salinity', 'do', 
+                                        'pH', 'secchi_2', 'chl_log1p'),
+                            labels = c(expression("Temperature (" * degree * "C)"), 
+                                       expression('Salinity' ~ '(PSU)'), 
+                                       expression('Dissolved' ~ 'Oxygen' ~ '(mg/l)'),
+                                       expression('pH'),
+                                       expression('Secchi' ~ 'Depth' ~ '(m)'),
+                                       expression('Chlorophyll A (' * mu * 'g/l)'))))
 ```
 
 ### Draft Graphic
@@ -679,7 +695,7 @@ cbind(labs)
 p <- ggplot(data_sel, aes(x = year, y = value)) +
     geom_jitter(aes(color = season_3), width = 0.3, height = 0, 
                 alpha = 0.1) +
-   geom_line(data = predicts_sel, 
+    geom_line(data = predicts_sel, 
              mapping = aes(x = year, y = yvar, color = tvar),
              size = 1) +
     xlab('') +
@@ -699,9 +715,9 @@ p <- ggplot(data_sel, aes(x = year, y = value)) +
   theme(legend.position = 'bottom') +
   guides(color = guide_legend(override.aes = list(size = 3, alpha = 0.5) ) ) +
   
-  facet_wrap(~parm, nrow = 3,
+  facet_wrap(~full_lab, nrow = 3,
                scale = 'free_y',
-               labeller = labeller(parm = labs))
+               labeller = label_parsed)
 p
 ```
 
@@ -711,8 +727,8 @@ p
 
 The Chlorophyll values we model and plot are actually a transformation
 of the  
-craw chlorophyll observations. As such, the values plotted are
-meaningless to potential readers. We need to provide a axis that
+raw chlorophyll observations. As such, the values plotted are
+meaningless to potential readers. We need to provide an axis that
 indicates the non-linearity of the Y axis.
 
 A little Googling suggests there is no easy way to adjust the Y axis
@@ -728,7 +744,7 @@ function that provides different values depending on the sub-plot we are
 in.
 
 The help file for `scale_y_continuous()` provides the option of setting
-the \`breaks parameter to:
+the `breaks` parameter to:
 
 > A function that takes the limits as input and returns breaks as output
 > (e.g., a function returned by scales::extended\_breaks())
@@ -831,9 +847,9 @@ p_jit <- ggplot(data_sel, aes(x = year, y = value)) +
 
 ``` r
 p_jit +
-  facet_wrap(~parm, nrow = 3,
+  facet_wrap(~full_lab, nrow = 3,
                scale = 'free_y',
-               labeller = labeller(parm = labs))
+               labeller = label_parsed)
 ```
 
 <img src="Surface_Trends_Graphics_files/figure-gfm/jitter_wide_bare-1.png" style="display: block; margin: auto;" />
@@ -855,12 +871,12 @@ annotations <- c(paste0(" +0.56","\U00B0", "C per decade"),
                  "No trend",
                  "Spring increase, summer decrease",
                  "Decrease summer and fall",
-                 "Decrease in spring and summer")
+                 "Decrease spring and summer")
 nested_data$annot <- annotations
 nested_data$annot
 #> [1] " +0.56°C per decade"              "No trend"                        
 #> [3] "No trend"                         "Spring increase, summer decrease"
-#> [5] "Decrease summer and fall"         "Decrease in spring and summer"
+#> [5] "Decrease summer and fall"         "Decrease spring and summer"
 ```
 
 #### Annotation Placement
@@ -876,18 +892,21 @@ ann_xloc[1] <- 'right'  # temperature
 ann_xloc[5] <- 'right'    # Secchi
 ann_yloc[5] <- 'top'    # Secchi
 ann_xloc[6] <- 'right'  # Chlorophyll
+ann_yloc[6] <- 'top'  # Chlorophyll
 
-annot <- tibble(parm = factor(levels(nested_data$parm), 
-                              levels = levels(nested_data$parm)),
+annot <- tibble(full_lab = factor(levels(data_sel$full_lab), 
+                              levels = levels(data_sel$full_lab)),
+                simple_lab = factor(levels(data_sel$simple_lab), 
+                              levels = levels(data_sel$simple_lab)),
                 annot = annotations, 
                 ann_xloc = ann_xloc, ann_yloc = ann_yloc)
 ```
 
 ``` r
 p_jit +
-  facet_wrap(~parm, nrow = 3,
+  facet_wrap(~full_lab, nrow = 3,
                scale = 'free_y',
-               labeller = labeller(parm = labs)) +
+               labeller = label_parsed) +
   geom_text_npc(data = annot, 
             mapping = aes(npcx = ann_xloc, npcy = ann_yloc, label = annot),
             hjust = 'inward',
@@ -903,9 +922,9 @@ ggsave('figures/wq_trends_six_wide_no_symb.pdf',
 
 ``` r
 p_jit +
-  facet_wrap(~parm, nrow = 6,
+  facet_wrap(~full_lab, nrow = 6,
                scale = 'free_y',
-               labeller = labeller(parm = labs)) +
+               labeller = label_parsed) +
   geom_text_npc(data = annot, 
             mapping = aes(npcx = ann_xloc, npcy = ann_yloc, label = annot),
             hjust = 'inward',
@@ -939,30 +958,30 @@ myglyphs <- factor(c('\U25bc', '','\U25b2'),
 mycolors = c('red4', 'gray', 'green2')
 
 
-syms <- tibble(parm = factor(levels(nested_data$parm), 
-                              levels = levels(nested_data$parm))) %>%
+syms <- tibble(full_lab = factor(levels(data_sel$full_lab), 
+                              levels = levels(data_sel$full_lab))) %>%
   mutate(symbol =  factor(symbols, levels = c('worse', 'steady', 'better')),
          icons  =   myglyphs[as.numeric(symbol)],
          cols = mycolors[as.numeric(symbol)])
 syms
 #> # A tibble: 6 x 4
-#>   parm        symbol icons cols  
-#>   <fct>       <fct>  <fct> <chr> 
-#> 1 temperature worse  <U+25BC>     red4  
-#> 2 salinity    steady <NA>  gray  
-#> 3 do          steady <NA>  gray  
-#> 4 pH          steady <NA>  gray  
-#> 5 secchi_2    worse  <U+25BC>     red4  
-#> 6 chl_log1p   better <U+25B2>     green2
+#>   full_lab                                  symbol icons cols  
+#>   <fct>                                     <fct>  <fct> <chr> 
+#> 1 "\"Temperature (\" * degree * \"C)\""     worse  <U+25BC>     red4  
+#> 2 "\"Salinity\" ~ \"(PSU)\""                steady <NA>  gray  
+#> 3 "\"Dissolved\" ~ \"Oxygen\" ~ \"(mg/l)\"" steady <NA>  gray  
+#> 4 "pH"                                      steady <NA>  gray  
+#> 5 "\"Secchi\" ~ \"Depth\" ~ \"(m)\""        worse  <U+25BC>     red4  
+#> 6 "\"Chlorophyll A (\" * mu * \"g/l)\""     better <U+25B2>     green2
 ```
 
 ### Final Products
 
 ``` r
 p_jit +
-  facet_wrap(~parm, nrow = 3,
+  facet_wrap(~full_lab, nrow = 3,
                scale = 'free_y',
-               labeller = labeller(parm = labs)) +
+               labeller = label_parsed) +
   geom_text_npc(data = annot, 
             mapping = aes(npcx = ann_xloc, npcy = ann_yloc, label = annot),
             hjust = 'inward',
@@ -983,9 +1002,9 @@ p_jit +
 
 ``` r
 p_jit +
-  facet_wrap(~parm, nrow = 6,
+  facet_wrap(~full_lab, nrow = 6,
                scale = 'free_y',
-               labeller = labeller(parm = labs)) +
+               labeller = label_parsed) +
   geom_text_npc(data = annot, 
             mapping = aes(npcx = ann_xloc, npcy = ann_yloc, label = annot),
             hjust = 'inward',
@@ -1007,14 +1026,14 @@ p_jit +
 ## Separate Graphics
 
 ``` r
-for (pp in levels(data_sel$parm)) {
+for (pp in levels(data_sel$simple_lab)) {
   dat <- data_sel %>%
-    filter(parm == pp)
+    filter(simple_lab == pp)
   preds <- predicts_sel %>%
-    filter(parm == pp)
+    filter(simple_lab == pp)
   ann <- annot %>%
-    filter(parm == pp)
-  
+    filter(simple_lab == pp)
+
   plt1 <- ggplot(dat, aes(x = year, y = value)) +
     geom_jitter(aes(color = season_3), width = 0.3, height = 0, 
                 alpha = 0.1) +
@@ -1027,7 +1046,7 @@ for (pp in levels(data_sel$parm)) {
             size = 3.25) +
     
     xlab('') +
-    ylab(labs[pp]) +
+    ylab(eval(pp)) +
     
     scale_color_manual(values = cbep_colors2()[c(1,2,4)],
                        name = '',
@@ -1048,3 +1067,46 @@ for (pp in levels(data_sel$parm)) {
 ```
 
 <img src="Surface_Trends_Graphics_files/figure-gfm/separate_graphics-1.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/separate_graphics-2.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/separate_graphics-3.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/separate_graphics-4.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/separate_graphics-5.png" style="display: block; margin: auto;" /><img src="Surface_Trends_Graphics_files/figure-gfm/separate_graphics-6.png" style="display: block; margin: auto;" />
+
+``` r
+  dat <- data_sel %>%
+    filter(simple_lab == "Chlorophyll A (ug/l)")
+  preds <- predicts_sel %>%
+    filter(simple_lab == "Chlorophyll A (ug/l)")
+  ann <- annot %>%
+    filter(simple_lab == "Chlorophyll A (ug/l)")
+
+  plt1 <- ggplot(dat, aes(x = year, y = value)) +
+    geom_jitter(aes(color = season_3), width = 0.3, height = 0, 
+                alpha = 0.1) +
+    geom_line(data = preds, 
+              mapping = aes(x = year, y = yvar, color = tvar),
+              size = 1) +
+    geom_text_npc(data = ann, 
+            mapping = aes(npcx = ann_xloc, npcy = ann_yloc, label = annot),
+            hjust = 'inward',
+            size = 3.25) +
+    
+    xlab('') +
+    ylab(eval(pp)) +
+    
+    scale_color_manual(values = cbep_colors2()[c(1,2,4)],
+                       name = '',
+                       guide = guide_legend(override.aes = list(alpha = 1))) +
+    
+    scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
+    xlim(1993, 2020) +
+    
+    theme_cbep(base_size = 12) +
+    # theme(axis.text.x = element_text(angle = 90,
+    #                                  size = 8,
+    #                                  hjust = 1,
+    #                                  vjust = 0),
+    #       axis.ticks.length.x = unit(0, 'cm')) +
+    
+    theme(legend.position = 'bottom')
+  print(plt1)
+#> Warning: Removed 8 rows containing missing values (geom_point).
+```
+
+<img src="Surface_Trends_Graphics_files/figure-gfm/chl_separate_graphics-1.png" style="display: block; margin: auto;" />

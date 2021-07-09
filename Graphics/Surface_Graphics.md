@@ -13,11 +13,10 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
     -   [Address Secchi Censored
         Values](#address-secchi-censored-values)
     -   [Create Recent Data](#create-recent-data)
-    -   [Create Nested Tibble](#create-nested-tibble)
+    -   [Create Labels Tibble](#create-labels-tibble)
     -   [Reorganize and Select Data](#reorganize-and-select-data)
 -   [Part 2: Faceted Graphics](#part-2-faceted-graphics)
     -   [Define Labels and Units](#define-labels-and-units)
-    -   [New Facet Labels](#new-facet-labels)
     -   [Draft Jitter Plot](#draft-jitter-plot)
     -   [Fixing the Chlorophyll Y Axis](#fixing-the-chlorophyll-y-axis)
     -   [Revised Jitter Plot](#revised-jitter-plot)
@@ -201,25 +200,36 @@ recent_data <- the_data %>%
 rm(the_data)
 ```
 
-## Create Nested Tibble
+## Create Labels Tibble
 
 To run parallel analyses on nested tibbles, we will need to reorganize
 the data so that we can analyze along parameters. We add a list of
 labels and measurement units to simplify later labeling of plots.
 
+c(‘temperature’, ‘salinity’, ‘do’,‘pH’, ‘secchi\_2’, ‘chl\_log1p’))
+
 ``` r
-units <- tibble(parm = c('secchi_2', 'temperature', 
+units <- tibble(parm = c('temperature', 
                               'salinity', 'do',
-                              'pctsat', 'pH', 
+                              'pctsat', 'pH', 'secchi_2', 
                               'chl', 'chl_log1p'),
-                label = c("Secchi Depth", "Temperature",
+                label = c( "Temperature",
                          "Salinity", "Dissolved Oxygen",
-                         "Percent Saturation", "pH",
+                         "Percent Saturation", "pH", "Secchi Depth",
                          "Chlorophyll A", "Chlorophyll A"),
-                units = c('m', paste0("\U00B0", "C"),
+                units = c(paste0("\U00B0", "C"),
                           'PSU', 'mg/l',
-                          '', '',
-                          'mg/l', 'mg/l'))
+                          '', '', 'm', 
+                          'ug/l', 'ug/l'),
+                fancy_label =  c(
+                  expression("Temperature (" * degree * "C)"),
+                  expression("Salinity" ~ "(PSU)"),
+                  expression("Dissolved Oxygen" ~ "(mg/l)"),
+                  expression("Percent" ~ " Saturation"), 
+                  expression("pH"),
+                  expression("Secchi" ~ "Depth" ~ "(m)"), 
+                  expression("Chlorophyll A (" * mu * "g/l)"),
+                  expression("Chlorophyll A (" * mu * "g/l)")))
 ```
 
 ## Reorganize and Select Data
@@ -242,8 +252,20 @@ data_long <- recent_data %>%
                           'pH', 'secchi_2', 'chl_log1p')) %>%
   mutate(parm = factor(parm,
                             levels = c('temperature', 'salinity', 'do', 
-                                       'pH', 'secchi_2', 'chl_log1p')))
+                                       'pH', 'secchi_2', 'chl_log1p'))) %>%
+  mutate(fancy_parm = factor(parm, levels = units$parm,
+                             labels = units$fancy_label))
 ```
+
+data\_long &lt;- recent\_data %&gt;% select(-dt, -year, -time,
+-sample\_depth, -secchi) %&gt;% relocate(water\_depth, .after = month)
+%&gt;% pivot\_longer(c(secchi\_2:chl\_log1p), names\_to = ‘parm’,
+values\_to = ‘value’) %&gt;% mutate(bottom\_flag =
+if\_else(parm==‘secchi\_2’, bottom\_flag, FALSE)) %&gt;% filter(!
+is.na(value)) %&gt;% filter(parm %in% c(‘temperature’, ‘salinity’, ‘do’,
+‘pH’, ‘secchi\_2’, ‘chl\_log1p’)) %&gt;% mutate(parm = factor(parm,
+levels = c(‘temperature’, ‘salinity’, ‘do’, ‘pH’, ‘secchi\_2’,
+‘chl\_log1p’)))
 
 # Part 2: Faceted Graphics
 
@@ -254,16 +276,6 @@ principally to simplify axis labels.
 
 We need a single data frame containing all the data, and a convenient
 way to label things correctly.
-
-## New Facet Labels
-
-``` r
-labs <- paste0(units$label, 
-                           if_else((! is.na(units$units) & 
-                                      ! nchar(units$units) == 0),
-                                       paste0(' (', units$units, ')'), ''))
-names(labs) <- units$parm
-```
 
 ## Draft Jitter Plot
 
@@ -286,9 +298,9 @@ names(labs) <- units$parm
                                      vjust = 0),
           axis.ticks.length.x = unit(0, 'cm')) +
   theme(legend.position = 'bottom') +
-  facet_wrap(~parm, nrow = 3,
+  facet_wrap(~fancy_parm, nrow = 3,
                scale = 'free_y',
-               labeller = labeller(parm = labs))
+               labeller = label_parsed)
 p
 ```
 
@@ -420,9 +432,9 @@ p_jit <- ggplot(data_long, aes(x = station_name, y = value)) +
 
 ``` r
 p_jit +
-  facet_wrap(~parm, nrow = 3,
+  facet_wrap(~fancy_parm, nrow = 3,
              scale = 'free_y',
-             labeller = labeller(parm = labs))
+             labeller = label_parsed)
 ```
 
 <img src="Surface_Graphics_files/figure-gfm/jitter_wide, -1.png" style="display: block; margin: auto;" />
@@ -435,9 +447,9 @@ p_jit +
 
 ``` r
 p_jit +
-  facet_wrap(~parm, nrow = 6,
+  facet_wrap(~fancy_parm, nrow = 6,
              scale = 'free_y',
-             labeller = labeller(parm = labs))
+             labeller = label_parsed)
 ```
 
 <img src="Surface_Graphics_files/figure-gfm/jitter_long, -1.png" style="display: block; margin: auto;" />
@@ -469,9 +481,9 @@ p_vio <- ggplot(data_long, aes(station_name, value)) +
 
 ``` r
 p_vio +
-  facet_wrap(~parm, nrow = 3,
-               scale = 'free_y',
-               labeller = labeller(parm = labs))
+  facet_wrap(~fancy_parm, nrow = 3,
+             scale = 'free_y',
+             labeller = label_parsed)
 #> Warning: position_dodge requires non-overlapping x intervals
 
 #> Warning: position_dodge requires non-overlapping x intervals
@@ -507,7 +519,7 @@ my_breaks_fxn_2 <- function(lims) {
   if(max(lims) < 3) {
     # Then we're looking at our transformed Chl data
   a <- prefered_breaks
-    return(log(a +1))
+    return(log(a + 1))
   }
   else {
     return(labeling::extended(lims[[1]], lims[[2]], 5))
@@ -541,9 +553,9 @@ p_bar <- ggplot(data_long, aes(x = station_name, y = value)) +
 
 ``` r
 p_bar +
-facet_wrap(~parm, nrow = 3,
-               scale = 'free_y',
-               labeller = labeller(parm = labs))
+facet_wrap(~fancy_parm, nrow = 3,
+             scale = 'free_y',
+             labeller = label_parsed)
 ```
 
 <img src="Surface_Graphics_files/figure-gfm/bar_wide-1.png" style="display: block; margin: auto;" />

@@ -153,23 +153,35 @@ recent_data <- the_data %>%
 rm(the_data)
 ```
 
-## Create Nested Tibble
+## Create Labels Tibble
 To run parallel analyses on nested tibbles, we will need to reorganize the 
 data so that we can analyze along parameters.  We add a list of labels and
 measurement units to simplify later labeling of plots.
+
+c('temperature', 'salinity', 'do','pH', 'secchi_2', 'chl_log1p'))
+
 ```{r create_nested}
-units <- tibble(parm = c('secchi_2', 'temperature', 
+units <- tibble(parm = c('temperature', 
                               'salinity', 'do',
-                              'pctsat', 'pH', 
+                              'pctsat', 'pH', 'secchi_2', 
                               'chl', 'chl_log1p'),
-                label = c("Secchi Depth", "Temperature",
+                label = c( "Temperature",
                          "Salinity", "Dissolved Oxygen",
-                         "Percent Saturation", "pH",
+                         "Percent Saturation", "pH", "Secchi Depth",
                          "Chlorophyll A", "Chlorophyll A"),
-                units = c('m', paste0("\U00B0", "C"),
+                units = c(paste0("\U00B0", "C"),
                           'PSU', 'mg/l',
-                          '', '',
-                          'mg/l', 'mg/l'))
+                          '', '', 'm', 
+                          'ug/l', 'ug/l'),
+                fancy_label =  c(
+                  expression("Temperature (" * degree * "C)"),
+                  expression("Salinity" ~ "(PSU)"),
+                  expression("Dissolved Oxygen" ~ "(mg/l)"),
+                  expression("Percent" ~ " Saturation"), 
+                  expression("pH"),
+                  expression("Secchi" ~ "Depth" ~ "(m)"), 
+                  expression("Chlorophyll A (" * mu * "g/l)"),
+                  expression("Chlorophyll A (" * mu * "g/l)")))
 ```
 
 
@@ -190,8 +202,26 @@ data_long <- recent_data %>%
                           'pH', 'secchi_2', 'chl_log1p')) %>%
   mutate(parm = factor(parm,
                             levels = c('temperature', 'salinity', 'do', 
-                                       'pH', 'secchi_2', 'chl_log1p')))
+                                       'pH', 'secchi_2', 'chl_log1p'))) %>%
+  mutate(fancy_parm = factor(parm, levels = units$parm,
+                             labels = units$fancy_label))
 ```
+
+
+data_long <- recent_data %>%
+  select(-dt, -year, -time, -sample_depth, -secchi) %>%
+  relocate(water_depth, .after = month) %>%
+  pivot_longer(c(secchi_2:chl_log1p), 
+               names_to = 'parm', 
+               values_to = 'value') %>%
+  mutate(bottom_flag = if_else(parm=='secchi_2', bottom_flag, FALSE)) %>%
+  filter(! is.na(value)) %>%
+  filter(parm %in% c('temperature', 'salinity', 'do', 
+                          'pH', 'secchi_2', 'chl_log1p')) %>%
+  mutate(parm = factor(parm,
+                            levels = c('temperature', 'salinity', 'do', 
+                                       'pH', 'secchi_2', 'chl_log1p')))
+
 
 
 # Part 2:  Faceted Graphics
@@ -201,15 +231,6 @@ to simplify axis labels.
 ## Define Labels and Units
 We need a single data frame containing all the data, and a convenient way 
 to label things correctly.
-
-## New Facet Labels
-```{r facet_labels}
-labs <- paste0(units$label, 
-                           if_else((! is.na(units$units) & 
-                                      ! nchar(units$units) == 0),
-                                       paste0(' (', units$units, ')'), ''))
-names(labs) <- units$parm
-```
 
 
 ## Draft Jitter Plot
@@ -232,9 +253,9 @@ names(labs) <- units$parm
                                      vjust = 0),
           axis.ticks.length.x = unit(0, 'cm')) +
   theme(legend.position = 'bottom') +
-  facet_wrap(~parm, nrow = 3,
+  facet_wrap(~fancy_parm, nrow = 3,
                scale = 'free_y',
-               labeller = labeller(parm = labs))
+               labeller = label_parsed)
 p
 ```
 
@@ -356,9 +377,9 @@ p_jit <- ggplot(data_long, aes(x = station_name, y = value)) +
 
 ```{r jitter_wide, , fig.width = 7, fig.height = 7} 
 p_jit +
-  facet_wrap(~parm, nrow = 3,
+  facet_wrap(~fancy_parm, nrow = 3,
              scale = 'free_y',
-             labeller = labeller(parm = labs))
+             labeller = label_parsed)
 
 
  ggsave('figures/surface_6_jitter_wide.pdf', device = cairo_pdf, 
@@ -367,9 +388,9 @@ p_jit +
 
 ```{r jitter_long, , fig.width = 3.5, fig.height = 9.5} 
 p_jit +
-  facet_wrap(~parm, nrow = 6,
+  facet_wrap(~fancy_parm, nrow = 6,
              scale = 'free_y',
-             labeller = labeller(parm = labs))
+             labeller = label_parsed)
 
 
  ggsave('figures/surface_6_jitter_long.pdf', device = cairo_pdf, 
@@ -397,9 +418,9 @@ p_vio <- ggplot(data_long, aes(station_name, value)) +
 
 ```{r violin_wide, fig.width = 7, fig.height = 7}
 p_vio +
-  facet_wrap(~parm, nrow = 3,
-               scale = 'free_y',
-               labeller = labeller(parm = labs))
+  facet_wrap(~fancy_parm, nrow = 3,
+             scale = 'free_y',
+             labeller = label_parsed)
 
 
 #ggsave('figures/surface_6_violin.pdf', device = cairo_pdf,
@@ -419,7 +440,7 @@ my_breaks_fxn_2 <- function(lims) {
   if(max(lims) < 3) {
     # Then we're looking at our transformed Chl data
   a <- prefered_breaks
-    return(log(a +1))
+    return(log(a + 1))
   }
   else {
     return(labeling::extended(lims[[1]], lims[[2]], 5))
@@ -454,9 +475,9 @@ p_bar <- ggplot(data_long, aes(x = station_name, y = value)) +
 
 ```{r bar_wide, fig.width = 7, fig.height = 7}
 p_bar +
-facet_wrap(~parm, nrow = 3,
-               scale = 'free_y',
-               labeller = labeller(parm = labs))
+facet_wrap(~fancy_parm, nrow = 3,
+             scale = 'free_y',
+             labeller = label_parsed)
 
 #ggsave('figures/surface_6_bar.pdf', device = cairo_pdf, width = 7, height = 7)
 ```
