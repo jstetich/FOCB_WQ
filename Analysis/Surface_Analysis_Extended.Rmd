@@ -1,0 +1,555 @@
+---
+title: "Checking Water Quality Trends to See if Changes are Accelerating"
+author: "Curtis C. Bohlen, Casco Bay Estuary Partnership"
+date: "7/10/2021"
+output:
+  github_document:
+    toc: true
+    fig_width: 5
+    fig_height: 4
+---
+
+<img
+    src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
+    style="position:absolute;top:10px;right:50px;" />
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.align = 'center',
+                      fig.width = 5, fig.height = 4,
+                      collapse = TRUE, comment = "#>")
+```
+
+# Introduction
+This Notebook analyzes FOCB's "Surface" data.
+These data are pulled from long term monitoring locations around the Bay.
+
+These are sites visited regularly by FOCB staff, either by boat or on land.  The 
+focus is on warm season sampling (April through October), with roughly monthly
+samples.  Earlier data from some land-based sites was collected by volunteers.
+
+This reflects only a small portion of FOCB's monitoring program, but the surface
+data provides consistent sampling history with the deepest historical record.
+
+Tn this notebook, we look specifically at a question raised by one of our
+reviewers:  Whether the TEMPERATURE and SALINITY show accelerating changes that 
+we should comment on in State of Casco Bay, and whether Secchi Depth is behaving
+differently inshore versus offshore.
+
+# Load Libraries
+```{r load_libraries}
+library(tidyverse)
+library(readxl)
+
+library(mgcv)     # For `gam()` and `gamm()` models
+library(emmeans)
+
+library(CBEPgraphics)
+load_cbep_fonts()
+theme_set(theme_cbep())
+```
+
+# Load Data
+## Establish Folder Reference
+```{r folder_refs}
+sibfldnm <- 'Original_Data'
+parent   <- dirname(getwd())
+sibling  <- file.path(parent,sibfldnm)
+
+dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
+```
+
+## Primary Data
+We specify column names because FOCB data has a row of names, a row of units,
+then the data.  This approach is simpler than reading names from the first
+row and correcting them to be R syntactic names.
+```{r load_data, warning = FALSE}
+fn    <- 'FOCB Surface All Current Sites With BSV Data.xlsx'
+fpath <- file.path(sibling,fn)
+
+mynames <- c('station', 'dt', 'time', 'sample_depth',
+             'secchi', 'water_depth','temperature', 'salinity',
+             'do', 'pctsat', 'pH', 'chl', 
+             'month', 'year', 'fdom', 'bga', 
+             'turbidity', 'blank', 'clouds', 'wndspd',
+             'winddir'
+             ) 
+
+the_data <- read_excel(fpath, skip=2, col_names = mynames) %>%
+  mutate(month = factor(month, levels = 1:12, labels = month.abb))
+
+rm(mynames)
+```
+
+### Remove 2020 only data
+```{r remove_vars}
+the_data <- the_data %>%
+select(-c(fdom:winddir))
+```
+
+## Add Station Names
+```{r add_station_names}
+fn    <- 'FOCB Monitoring Sites.xlsx'
+fpath <- file.path(sibling,fn)
+loc_data <- read_excel(fpath) %>%
+  select(Station_ID, Station_Name) %>%
+  rename(station = Station_ID,
+         station_name = Station_Name)
+
+the_data <- the_data %>%
+  left_join(loc_data, by = 'station') %>%
+  relocate(station_name, .after = station) %>%
+  
+  relocate(year, .after = dt) %>%
+  relocate(month, .after = year)
+```
+
+Our data contains two stations that are not associated with locations that were 
+included in our spatial data.  We can see that because when we `left_join()` by 
+`station`, no `station_name` is carried over.
+```{r unused_sites}
+l <- the_data %>%
+  group_by(station) %>%
+  summarize(missing = sum(is.na(station_name))) %>%
+  filter(missing > 0) %>%
+  pull(station)
+l
+```
+
+If we look at those records, one is represented by only a single observation,
+and the other only by data from 2020.  Neither matter for the current analysis.
+They will get filtered out when we select data to describe recent conditions,
+and trends.
+```{r show_unused_data}
+the_data %>%
+  filter(station %in% l)
+```
+
+## Add Day of Year Value
+```{r add_doy}
+the_data <- the_data %>%
+  mutate(doy = as.numeric(format(dt, '%j')),
+         yearf = factor (year)) %>%
+  relocate(doy, .after = dt) %>%
+  relocate(yearf, .after = year)
+```
+
+## Address Secchi Censored Values
+```{r secchi_censored}
+the_data <- the_data %>%
+  mutate(secchi_2 = if_else(secchi == "BSV", water_depth, as.numeric(secchi)),
+         bottom_flag = secchi == "BSV") %>%
+  relocate(secchi_2, .after = secchi) %>%
+  relocate(bottom_flag, .after = secchi_2)
+```
+
+## Limit Data
+```{r}
+the_data <- the_data %>%
+  select(-c(do:chl))
+```
+
+
+# Create Trend Data
+First, we create a tibble containing information on years in which each
+station was sampled.
+```{r which_years}
+years_data <- the_data %>%
+  group_by(station, year) %>%
+  summarize(yes = ! all(is.na(temperature)),
+            .groups = 'drop_last') %>%
+  summarize(years = sum(yes, na.rm = TRUE),
+            recent_years =  sum(yes & year > 2014, na.rm = TRUE),
+            .groups = 'drop')
+```
+
+Then we identify stations with at least 10 years of data, and at least three
+years of data from the last five years, and use that list to select data for
+trend analysis.  Finally, we adjust the levels in the `station` and 
+`station_name` variables.
+```{r build_trend_data}
+selected_stations <- years_data %>%
+  filter(years> 9, recent_years >2) %>%
+  pull(station)
+
+trend_data <- the_data %>%
+  filter(station %in% selected_stations) %>%
+  mutate(station = fct_drop(station),
+         station_name = fct_drop(station_name)) %>%
+  mutate(station = fct_reorder(station, temperature, mean, na.rm = TRUE),
+         station_name = fct_reorder(station_name, temperature, mean, na.rm = TRUE))
+rm(selected_stations, years_data)
+```
+
+```{r how_many}
+length(unique(trend_data$station))
+```
+
+We are reduced to  17 stations with long-term records for trend analysis.
+
+
+# Check Sample Depths
+```{r}
+summary(the_data$sample_depth)
+```
+So almost all samples are from under a meter, presumably because we filtered out 
+deeper water samples during data preparation.
+
+# Analysis of Temperature
+Our goal here is to identify whether there are changes in the RATE of change of 
+temperature. Are temperatures increasing FASTER in recent years.
+
+There are several modeling strategies possible here, including quadratic
+models, piecewise linear models, or GAM models.  WE focus initially on
+quatratic models and gam models, always in a hierarchical model context.
+These hierarchical models treat stations as random factors.  We explore both 
+models that also treat Years as random factors and models that do not.
+
+
+## Hierarchical Polynomial Models
+We start by modelling a consistent bay-wide pattern.
+
+```{r}
+lmer_t1 <- gam(temperature~ poly(year,2) + month + s(yearf, bs = 're') + 
+                 s(station, bs = 're'), 
+               data = trend_data)
+```
+
+```{r}
+oldpar <- par(mfrow = c(2,2))
+gam.check(lmer_t1)
+par(oldpar)
+```
+Residuals are heavy tailed, but otherwise not bad.
+
+```{r}
+plot(lmer_t1)
+```
+
+So, year to year variation in temperature is close to normally distributed,
+suggesting the use of a random Year term won't distort the model all that
+much, but as we treat year to year variation as random, we may hide trends.
+```{r}
+summary(lmer_t1)
+```
+The non-linear term in the polynomial term is deemed not significant.  We chose
+not to further explore that term via analysis of AIC, ecause tere are other 
+questions of model form that may hav a larger impact on results.
+
+First, lets drop the idea that year to year variation is in part random.  This
+has the effect of treating each observation as independent, rather than
+assuming that measurements collected within one year are correlated.
+
+```{r}
+lmer_t2 <- gam(temperature ~ poly(year,2) + month  + 
+                 s(station, bs = 're'), 
+               data = trend_data)
+
+summary(lmer_t2)
+```
+The non-linear term is still not significant.
+
+## Hierarchical GAM Models
+```{r}
+lmer_t3 <- gam(temperature ~ s(year, k = 4) + month  + s(yearf, bs = 're') +
+                 s(station, bs = 're'), 
+               data = trend_data)
+
+summary(lmer_t3)
+```
+Note that the effective degrees of freedom assigned to the GAM smoother for the 
+Year term is 1, suggesting a linear relationship (i.e., no acceleration of 
+warming).
+
+```{r}
+lmer_t4 <- gam(temperature ~ s(year, k = 4) + month  + 
+                 s(station, bs = 're'), 
+               data = trend_data)
+
+summary(lmer_t4)
+```
+
+If we granta bit morefreedom to fit every wiggle between yeas, but not fitting
+a random effects term for the year, the effective degrees of freedom suggests a 
+non-linear fit.  We plot the GAM to assess its shape informally.
+
+```{r}
+plot(lmer_t4)
+```
+
+So, a GAM fit suggests rate of temperature increase has either not changed
+(if we treat year to year variation as partially random) or SLOWED in recent 
+years, not accelerated.
+
+## Modelling Trends within Sites
+Another approach is to look at temperature changes within each site:
+```{r}
+lmer_t5 <- gam(temperature ~ s(year, k = 4, by = station) + month  + s(yearf, bs = 're') +
+                 s(station, bs = 're'), 
+               data = trend_data)
+
+summary(lmer_t5)
+```
+Note that the effective degrees of freedom for statistically significant GAM 
+fits are usually 1, and always under 2. Looking at the fits, these are linear or 
+barely curved fits, for the most part. Large but non-significant curves at a few 
+sites help obscure the larger patterns, but overall, we again see no real 
+evidence for any acceleration of warming.
+
+
+```{r}
+plot(lmer_t5, se = FALSE)
+```
+
+While a  FEW sites show acceleration of warming, It is by no means a universal
+pattern.  While most sites show little evidence for a change in rate of warming,
+some show and increase, and some show a decrease. Claiming any large-scale 
+pattern here appears to be a stretch.
+
+```{r}
+lmer_t6 <- gam(temperature ~ s(year, k = 4, by = station) + month  + 
+                 s(station, bs = 're'), 
+               data = trend_data)
+
+summary(lmer_t6)
+```
+
+If we do NOT treat years as partially a random factor, we get more apparently
+significnat non-linear (EDF > 1) trends.  But a higher proportion of sites now suggest a decrease in warming.
+
+```{r}
+plot(lmer_t6, se = FALSE)
+```
+
+# Analysis of Salinity Data
+Our reviewer asked whether the number of "high salinity excursions" had 
+increased lately. We suspect this may reflect changes in monitoring methods, 
+rather than real changes in conditions on the water.
+
+If that's the case, we might expect variability to change, but not means and 
+medians.
+
+```{r}
+ggplot(trend_data, aes(dt, salinity)) + 
+  geom_point()
+```
+```{r}
+ann_means <- trend_data %>%
+  select(station, dt, year, yearf, month, salinity) %>%
+  group_by(year) %>%
+  summarize(across(.cols = salinity, 
+                   .fns = c(mean = mean, median = median, p90 = quantile), 
+                   na.rm = TRUE,
+                   probs = .9,
+                   .names = "sal_{.fn}"),
+            .groups = 'drop') %>%
+  mutate(midyear = ISOdate(year, 6, 15))
+
+ann_means
+```
+```{r}
+ggplot(trend_data, aes(dt, salinity)) + 
+  geom_point(color = 'gray50') +
+  geom_line(data = ann_means, mapping = aes(midyear, sal_median),
+             size = 2, color = 'orange') +
+  geom_line(data = ann_means, mapping = aes(midyear, sal_mean),
+             size = 2, color = 'yellow') +
+  geom_line(data = ann_means, mapping = aes(midyear, sal_p90),
+             size = 2, color = 'red') +
+  ylim(20, 35)
+```
+So, I see no evidence that statistical summaries -- even the 90th percentile --
+show a change in the last few years.  This tends to support the idea that the
+visually obvious change in outliers reflects better data quality, not anything
+going on in the ocean.
+
+# Analysis of Secchi Depths
+The key question here was whether there are differences between inshore and 
+offshore sites.
+
+## Incorporate Regionalization
+We assigned nutrient monitoring sites to regions when we chose to 
+combine maps of locatiosn of FOCB and DEP nitrogen samples.  We reuse
+that classification here, largely for convenience.
+
+```{r folder_refs_2}
+sibfldnm <- 'Derived_Data'
+parent   <- dirname(getwd())
+sibling  <- file.path(parent,sibfldnm)
+```
+
+```{r}
+fn = 'combined_locations.csv'
+locations <- read_csv(file.path(sibling, fn))
+```
+
+
+```{r}
+secchi_data <- trend_data %>%
+  select(-temperature, -salinity) %>%
+  left_join(locations, by = c('station' = 'site'))
+```
+
+But there are too many regions, so we further simplify.
+
+```{r}
+sites_df <- secchi_data %>%
+  group_by(station) %>%
+  summarize(station = first(station),
+            station_name = first(station_name),
+            .groups = 'drop') %>%
+  left_join(locations, by = c('station' = 'site')) %>%
+  select(-latitude, -longitude, -source) %>%
+  relocate(region, .after = station_name) %>%
+  mutate(mod_region = recode(region, 
+                             'Fore River' = 'Embayments',
+                             'Harraseeket' = 'Embayments',
+                             'New Meadows' = 'Embayments',
+                             'Presumpscot Estuary' = 'Embayments',
+                             'Royal River Estuary' = 'Embayments'
+                             ))
+
+xtabs(~region + mod_region, data = sites_df)
+```
+
+```{r}
+tmp <- sites_df %>%
+  group_by(region) %>%
+  summarize(mod_region = first(mod_region))
+
+secchi_data <- secchi_data %>%
+  left_join(tmp, by = 'region')
+```
+
+
+```{r}
+ggplot(secchi_data, aes(dt, secchi_2)) + 
+  geom_point(aes(color = mod_region), alpha = 0.25)
+```
+
+### Add Seasonal Factor
+```{r seasonal_f}
+secchi_data <- secchi_data %>%
+  mutate(season_3 =  fct_collapse(month, 
+                                 Spring = c('Apr', 'May'), 
+                                 Summer = c('Jun','Jul', 'Aug'),
+                                 Fall   =  c('Sep', 'Oct'))) %>%
+  relocate(season_3, .after = month)
+```
+
+
+## Modeling by Region
+Our core question is whether the seasonal changes in Secchi Depth are 
+more pronounced in some regions compared to others.
+```{r}
+lm_s1 <- lm(secchi_2 ~ season_3  * mod_region * year,
+               data = secchi_data)
+summary(lm_s1)
+```
+
+```{r}
+lm_s2 <- step(lm_s1)
+summary(lm_s2)
+```
+
+```{r}
+lm_s3 <- lm(secchi_2 ~ season_3  + mod_region +  year +  
+              season_3:year +
+              mod_region:year,
+               data = secchi_data)
+summary(lm_s3)
+```
+
+That is tricky to visualize.  We will need a faceted graphic to
+show different predictions by regions.
+
+```{r}
+(emtrends<- emtrends(lm_s3, ~ season_3 + mod_region , var = 'year'))
+```
+
+SO that makes it clear what is going on.  Secchi depths are declining most 
+of the time in all three regions, The change is small and probably not
+statistically robust in the spring.  Generally, the decline in water clarity is 
+stronger in each region as you get later in the year. The strongest declines 
+have been offshore.
+
+But what I really want are the predictions, so I can make a graphic out of these 
+ideas.
+
+```{r}
+(emms <- as_tibble(emmeans(lm_s3, 
+                           ~ season_3 + mod_region + year, 
+                           cov.keep = 'year')) %>%
+  mutate(midyear = ISOdate(year, 6, 15)))
+```
+
+```{r fig.width = 3.5, fig.height=6}
+
+dotcolors = scales::muted(cbep_colors2()[c(1,3,5)], l = 50)
+
+ggplot(secchi_data, aes(dt, secchi_2, color = season_3)) +
+  geom_point(aes(fill = season_3), shape = 21, alpha = 0.25, size = 2) +
+  facet_wrap(~mod_region, nrow = 3) +
+  geom_line(data = emms, mapping = aes(x = midyear,
+                                   y = emmean), lwd = 1) +
+  
+  scale_fill_manual(values = dotcolors, name = '') +
+  scale_color_manual(values = cbep_colors2()[c(1,3,5)], name = '') +
+  
+  # geom_linerange(data = emms, mapping = aes(x = midyear, 
+  #                                           y = emmean,
+  #                                           ymin = lower.CL, 
+  #                                           ymax = upper.CL))
+  
+  theme_cbep(base_size = 12) +
+  theme(legend.position = 'bottom',
+        panel.grid.major.y = element_line(color = 'gray85')) +
+  
+  ylab('Secchi Depth (m)') +
+  xlab('')
+  
+```
+
+
+```{r fig.width = 3.5, fig.height=6}
+
+dotcolors = scales::muted(cbep_colors2()[c(1,3,5)], l = 50)
+
+ggplot(secchi_data, aes(dt, secchi_2, color = mod_region)) +
+  geom_point(aes(fill = mod_region), shape = 21, alpha = 0.25, size = 2) +
+  facet_wrap(~season_3, nrow = 3) +
+  geom_line(data = emms, mapping = aes(x = midyear,
+                                   y = emmean), lwd = 1) +
+  
+  scale_fill_manual(values = dotcolors, name = '') +
+  scale_color_manual(values = cbep_colors2()[c(1,2,5)], name = '') +
+  
+  guides(fill=guide_legend(ncol=2)) +
+  
+  theme_cbep(base_size = 12) +
+  theme(legend.position = 'bottom',
+        panel.grid.major.y = element_line(color = 'gray85')) +
+  
+  ylab('Secchi Depth (m)') +
+  xlab('')
+  
+```
+
+# Checking muted colors
+```{r}
+scales::show_col(c("red",
+                   scales::muted("red", l = 0),
+                   scales::muted("red", l = 25), 
+                   scales::muted("red", l = 50), 
+                   scales::muted("red", l = 75),
+                   scales::muted("red", l = 100)))
+```
+```{r}
+scales::show_col(c("red",
+                   scales::muted("red", c = 0),
+                   scales::muted("red", c = 25), 
+                   scales::muted("red", c = 50), 
+                   scales::muted("red", c = 75),
+                   scales::muted("red", c = 100)))
+```
+
+

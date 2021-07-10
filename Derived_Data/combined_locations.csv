@@ -1,0 +1,64 @@
+site,site_name,short_name,latitude,longitude,source,region
+AC01,ANTHOINE CREEK - AC01,Anthoine Creek 1,43.629,-70.267,DEP,Fore River
+AC02,ANTHOINE CREEK - AC02,Anthoine Creek 2,43.63,-70.264,DEP,Fore River
+AC04,ANTHOINE CREEK - AC04,Anthoine Creek 4,43.632,-70.261,DEP,Fore River
+AC05,ANTHOINE CREEK - AC05,Anthoine Creek 5,43.63386,-70.25861,DEP,Fore River
+BMR02,B&M Railroad /Back Cove,B&M Railroad,43.676295,-70.250053,Both,Inner Bay
+CBPR,Presumpscot Estuary - CBPR,Presumpscot Mouth,43.679895,-70.237156,DEP,Inner Bay
+CMS1,Continuous Monitoring Station 1,Cousins Island,43.7519896,-70.1392618,FOCB,Inner Bay
+CR00,COUSINS RIVER - CR00,Cousins 1,43.82922,-70.14582,DEP,Royal River Estuary
+CR-31,COUSINS RIVER - CR-31,Cousins 2,43.81201,-70.153415,DEP,Royal River Estuary
+CR-44,COUSINS RIVER - CR-44,Cousins 3,43.79731,-70.14607,DEP,Royal River Estuary
+CRTRIB0,COUSINS RIVER - CRTRIB0,Cousins Trib,43.8212,-70.16126,DEP,Royal River Estuary
+EEB18,East End Beach,East End Beach,43.671281,-70.241942,Both,Inner Bay
+FR01,FORE RIVER - FR01,Fore River 1,43.65889,-70.31111,DEP,Fore River
+FR02,FORE RIVER - FR02,Fore River 2,43.6526,-70.30021,DEP,Fore River
+FR03,FORE RIVER - FR03,Fore River 3,43.64317,-70.28558,DEP,Fore River
+FR04,FORE RIVER - FR04,Fore River 4,43.64074,-70.27357,DEP,Fore River
+FR05A,FORE RIVER - FR05A,Fore River 5a,43.641661,-70.26118,DEP,Fore River
+FR05B,FORE RIVER - FR05B,Fore River 5b,43.642394,-70.26035,DEP,Fore River
+FR06,FORE RIVER - FR06,Fore River 6,43.64389,-70.25778,DEP,Fore River
+FR07,FORE RIVER - FR07,Fore River 7,43.6486,-70.2544,DEP,Fore River
+FR08,FORE RIVER - FR08,Fore River 8,43.65611,-70.25,DEP,Fore River
+FR09,FORE RIVER - FR09,Fore River 9,43.6577,-70.23539,DEP,Fore River
+HR01,HARRASEEKET RIVER - HR01,Harraseeket A,43.84239,-70.09994,DEP,Harraseeket
+HR02,HARRASEEKET RIVER - HR02,Harraseeket C,43.839789,-70.08581,DEP,Harraseeket
+HR03,HARRASEEKET RIVER - HR03,Harraseeket D,43.82949,-70.09537,DEP,Harraseeket
+HR04,HARRASEEKET RIVER - HR04,Harraseeket G,43.81995,-70.1044,DEP,Harraseeket
+HR05,HARRASEEKET RIVER - HR05,Harraseeket I,43.80438,-70.09833,DEP,Harraseeket
+HR1,Harraseeket 1,Harraseeket H,43.812525,-70.105293,FOCB,Harraseeket
+HR2,Harraseeket-South Freeport,Harraseeket F,43.820075,-70.104023,FOCB,Harraseeket
+HR3,Harraseeket 3,Harraseeket E,43.828902,-70.096262,FOCB,Harraseeket
+HR4,Upper Harraseeket,Harraseeket B,43.842034,-70.095875,FOCB,Harraseeket
+KVL84,Knightville Landing,Knightville,43.6398783,-70.2547617,FOCB,Fore River
+LC01,LONG CREEK - LC01,Long Creek 1,43.63326,-70.31305,DEP,Fore River
+LC02,LONG CREEK - LC02,Long Creek 2,43.643658,-70.292762,DEP,Fore River
+MPL86,Mere Point Landing,Mere Point,43.827801,-70.016164,FOCB,Inner Bay
+NMM79,New Meadows Marina,New Meadows,43.9100771,-69.8696533,FOCB,New Meadows
+OBY35,Orrs Bailey Yacht Club,Orr's Island,43.7524667,-69.9865667,FOCB,Outer Bay
+P5BSD,Broad Sound,Broad Sound,43.732311,-70.066439,FOCB,Outer Bay
+P6FGG,Fort Gorges,Fort Gorges,43.66231,-70.225882,Both,Inner Bay
+P7CBI,Clapboard Island,Clapboard Island,43.719255,-70.202551,Both,Inner Bay
+PH1,Portland Harbor 1,Portland Harbor 1,43.656535,-70.240653,FOCB,Fore River
+PH2,Portland Harbor 2,Portland Harbor 2,43.64447,-70.258911,FOCB,Fore River
+PH3,Portland Harbor 3,Portland Harbor 3,43.639119,-70.279831,FOCB,Fore River
+PKT42,Quahog Bay,Quahog Bay,43.797663,-69.927041,FOCB,Outer Bay
+PR01,Presumpscot Estuary - PR01,Presumpscot 1,43.72063,-70.273025,DEP,Presumpscot Estuary
+PR-13,Presumpscot Estuary - PR-13,Presumpscot 2,43.71316,-70.24715,DEP,Presumpscot Estuary
+PR-17,Presumpscot Estuary - PR-17,Presumpscot 3,43.70599,-70.24723,DEP,Presumpscot Estuary
+PR-19,Presumpscot Estuary - PR-19,Presumpscot 4,43.70364,-70.24398,DEP,Presumpscot Estuary
+PR-28,Presumpscot Estuary - PR-28,Presumpscot 5,43.69067,-70.24642,DEP,Presumpscot Estuary
+PRV70,Presumpscot Estuary,Walton Park,43.716842,-70.263926,Both,Presumpscot Estuary
+PYC43,Falmouth Town Landing,Falmouth,43.731969,-70.203954,FOCB,Inner Bay
+RR00,ROYAL RIVER - RR00,Royal A,43.798663,-70.178415,DEP,Royal River Estuary
+RR00_A,ROYAL RIVER - RR00,Royal B,43.798663,-70.178415,DEP,Royal River Estuary
+RR-01,ROYAL RIVER - RR-01,Royal C,43.798078,-70.17773,DEP,Royal River Estuary
+RR-06,ROYAL RIVER - RR-06,Royal E,43.794604,-70.168016,DEP,Royal River Estuary
+RR-13,ROYAL RIVER - RR-13,Royal F,43.79018,-70.156381,DEP,Royal River Estuary
+RR-19,ROYAL RIVER - RR-19,Royal G,43.795518,-70.145465,DEP,Royal River Estuary
+RR-20,ROYAL RIVER - RR-20,Royal H,43.796011,-70.143715,DEP,Royal River Estuary
+RRC46,Lower Royal River,Royal I,43.79185,-70.1412833,FOCB,Royal River Estuary
+RRY47,Upper Royal River,Royal D,43.7953609,-70.1725436,FOCB,Royal River Estuary
+SMT50,SMCC Pier,SMCC Pier,43.651051,-70.228347,FOCB,Inner Bay
+STR54,Upper Fore River,Upper Fore River,43.6587333,-70.3109,FOCB,Fore River
+TB01,TROUT BROOK - TB01,Trout Brook,43.63663,-70.24934,DEP,Fore River
