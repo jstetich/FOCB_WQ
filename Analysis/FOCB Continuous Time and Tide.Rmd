@@ -1,0 +1,528 @@
+---
+title: "FOCB Continuous Data Preliminary Analysis, Checking Times and Tides"
+author: "Curtis C. Bohlen, Casco Bay Estuary Partnership"
+date: "2/18/2021"
+output:
+  github_document:
+    toc: true
+    fig_width: 7
+    fig_height: 5
+---
+
+<img
+    src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
+    style="position:absolute;top:10px;right:50px;" />
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.align = 'center',
+                      fig.width = 5, fig.height = 4,
+                      collapse = TRUE, comment = "#>")
+```
+
+#Load Data
+## Libraries
+```{r}
+library(tidyverse)
+library(readxl)
+library(GGally)
+library(zoo)
+
+library(CBEPgraphics)
+load_cbep_fonts()
+theme_set(theme_cbep())
+```
+
+## Folders
+```{r folder_refs}
+sibfldnm <- 'Original_Data'
+parent   <- dirname(getwd())
+sibling  <- file.path(parent,sibfldnm)
+```
+
+## Primary Data
+```{r load_data, warning = FALSE}
+fn    <-  'CMS1 Data through 2019.xlsx'
+fpath <- file.path(sibling,fn)
+
+the_data <- read_excel(fpath, col_types = c("numeric", "date", "date",
+                                            "numeric","numeric","numeric",
+                                            "numeric","numeric","numeric",
+                                            "numeric","numeric",
+                                            "numeric","numeric",
+                                            "numeric","numeric",
+                                            "numeric", "numeric","numeric"))
+```
+
+Both the "Date" and "Time" columns appear to contain excel date-time
+coordinates. The two columns were just were formatted differently in Excel.
+However, not all Time entries are consistent.  Some were entered as text, some
+as dates, leading to import errors:
+```{r}
+the_data %>%
+  mutate(row = row_number()) %>%
+ggplot(aes(Time, row)) + geom_point()
+```
+
+Some Times are bare times, with the Excel default "Year zero" in the early 
+1900s. Others are complete dates and times.
+
+## Add Manually Created Times
+We Create two Date Time values from the Month, Year, Day and Hour Columns, 
+with different assumptions about timezone.  We compare them to the datetime
+column (originally "date") to see what's going on. That allows us to evaluate
+what time coordinates were used.  The challenge here is that we are dealing with
+Excel's time handling and date/time formatting, as well as FOCB's data
+entry and QA/QC practices.
+
+```{r}
+the_data <- the_data %>%
+  mutate(DateTime_EST = ISOdatetime(Year, Month, Day, 
+                                    Hour, 0, 0, 
+                                    tz = 'Etc/GMT-5'),
+         DateTime_EST_EDT  = ISOdatetime(Year, Month, Day, 
+                                                 Hour, 0, 0, 
+                                                 tz = "America/New_York"),
+         dt = as.Date(Date)) %>%
+  relocate(dt, DateTime_EST, DateTime_EST_EDT, .after = Time) %>%
+  relocate(Year, Month, Day, Hour, .after = DateTime_EST_EDT)
+```
+
+We delete the first row, which contained units metadata, and modify column 
+names because FOCB used non-syntactic names, which are frustrating to work with 
+here in R.
+
+```{r}
+the_data <- the_data %>%
+  slice(-1) %>%
+  select(-Time) %>%
+  rename_with(.fn = tolower) %>%
+  rename(datetime = date,
+         depth = `water depth`,
+       pctsat = `do%`,
+       omega_a = `omega aragonite`)
+
+```
+
+
+# Metadata
+|-----------------|-------------------------|----------------| 
+date	            | Internal Representation |                | 
+time	            | Internal Representation |  Has errors    | 
+datetime_est      | GMT-5 hours (EST) | Constructed from components | 
+datetime_est_edt  | Local CLock Time (EST and EDT | Constructed from components| 
+depth	            | meters                  |                | 
+temperature       | Degrees C               |                | 
+salinity          | PSU                     |                | 
+do                | mg/l                    |                | 
+pctsat            | Percent                 |                | 
+ph	              | NBS                     |                | 
+hl	              | Chlorophyll A, in ug/l  |                | 
+pCO2              |	ppm                     |                | 
+month	            | Integer                 |                | 
+year	            | Integer                 |                | 
+day	              | Integer                 |                | 
+hour	            | Integer                 |                | 
+ta	              | Total alkalinity, uM/kg|                |           
+DIC	              | Dissolved inorganic carbon, uM/kg |       | 
+omega_a           | Omega Aragonite, Dimensionless   |       | 
+|-----------------|-------------------------|----------------| 
+
+
+# Evaluating Time Coordinates
+There has been some ambiguity in the past about how datetimes were created by
+FOCB.  We checkher eto confirm that those problems have been respolved
+
+## Common Timezone Names for Reference
+`OlsonNames()` is a function that returns a collection of timezone names that R
+can accept.
+```{r}
+table(sl <- grepl("/", OlsonNames()))
+
+OlsonNames()[ !sl ] # the simple ones, without slashes in the name
+```
+
+## Plot Sequential Times
+```{r}
+ggplot(the_data, aes(datetime)) + 
+  geom_point(aes(y =  datetime - datetime_est), color = 'red', alpha = 0.2, size = 0.2) +
+  ylab('Difference From Excel Time')
+```
+
+That suggest that we are off by as much as a day (60*60*24 seconds), perhaps 
+because the datetime conversion is assigning records to the wrong day sometimes.
+
+```{r}
+ggplot(the_data, aes(datetime)) + 
+  geom_point(aes(y =  datetime - datetime_est_edt), 
+             color = 'blue', size = 0.1, alpha = 0.1) +
+  ylab('Difference From Excel Time')
+```
+
+So, when we convert using clock time the difference between our
+constructed times and Excel Date is smaller, but still not zero.  But here 
+we are off by SECONDS for the most part.
+
+Data in Excel was stored in clock time, but there are still inconsistencies,
+probably because times in Excel has both values and formats, which can lead to 
+confusion.
+
+The conclusion is, we need to work wit calculated dates and times, not rely on 
+the ones in the Excel spreadsheets.
+
+```{r}
+the_data <- the_data %>%
+  select(-datetime) %>%
+  rename(datetime = datetime_est_edt)
+```
+
+## Checking start of DST
+Lets look around the start of daylight savings:
+
+2017 	March 12 	November 5  
+2018 	March 11 	November 4  
+
+Formally, EDT starts because there is no 2:00 am hour as we switch to EDT.
+We confirm that that is true here.
+```{r}
+the_data %>%
+  filter(year == 2017, month == 3, day == 12, hour < 5)
+```
+
+```{r}
+the_data %>%
+  filter(year == 2018, month == 3, day == 11, hour < 5)
+```
+
+So FOCB has correctly converted times to clock time.
+
+
+## Missing Data
+Rows 14615  and 14616 correspond to real times, but appear to be empty of
+data. Since we have time stamps, we can ignore these rows for most purposes,
+relying on R's standard handling of missing values.
+```{r}
+the_data %>%
+  filter(count > 14612, count < 14618)
+```
+
+```{r}
+which(is.na(the_data$datetime))
+```
+
+Are there times separated by more than an hour?  (because times could be
+slightly different in the seconds place, we actually search for times 
+more than an hour and one minute apart).  We find about 27 gaps in the 
+data, where data is missing for a few hours. We show both the record
+immediately before the gap and immediately after the gap.
+
+Many gaps appear to start at midnight, and so may reflect dat aQA/QC practices.
+```{r}
+thespots <- which(the_data$datetime_est - lag(the_data$datetime_est) > 60*61)
+before <- thespots - 1
+
+allspots <- c(thespots, before)
+allspots <- sort(allspots)
+the_data[allspots,]
+```
+
+```{r}
+the_data <- the_data %>%
+  select(-count, -datetime_est)
+```
+
+# Evaluating Bimodal Distributions  
+
+* Depth and temperature show strong bimodal distributions.  
+* DO shows some bimodal structure, but DOSat does not.  
+
+So, lets  look at those bimodal distributions
+```{r}
+the_data %>% ggplot(aes(datetime, temperature)) + 
+  geom_point()
+```
+
+Slicing that by temperature wil lshow higher densities of observations at 
+seasonal high and low values, where temperatures do not change as rapidly.
+
+```{r}
+monthmeans <- the_data %>% 
+        group_by(month) %>% 
+        summarise(meantemp = mean(temperature, na.rm = TRUE),
+                  mintemp = min(temperature, na.rm = TRUE),
+                  maxtemp = max(temperature, na.rm = TRUE)) %>%
+  mutate(monthf = factor(month, levels = as.character(1:12),
+                                   labels = c('Jan','Feb','Mar','Apr','May',
+                                              'Jun', 'Jul','Aug','Sep','Oct',
+                                              'Nov','Dec'))) %>%
+  arrange(monthf) %>%
+  filter(! is.na(month))
+
+```
+
+
+WE plot against time shifted by six hours, so the value of zero is six a.m,
+which should be about the coolest time of day.
+```{r}
+ggplot() +
+  geom_jitter(data = the_data, aes(x = month,
+                                   y = temperature, 
+                                   color = (hour + 18)%%24), 
+              alpha = 0.25) +
+  scale_colour_distiller( type = "div", palette = 1) +
+  xlim(0,12) +
+    geom_line(data = monthmeans, aes(x = month, y = meantemp), 
+              color = 'aquamarine4', lwd = 2) +
+    geom_line(data = monthmeans, aes(x = month, y = mintemp), 
+              color = 'blue', lwd = 2) +
+    geom_line(data = monthmeans, aes(x = month, y = maxtemp), 
+              color = 'green', lwd = 2)
+
+```
+
+So, it looks like the bimodal distribution of temperatures reflects the long
+periods of the year that are relatively warm (July, August and September) and
+relatively cold (Latter half of December, January, February, March).
+
+Lets try to color code by month, and add markers for the monthly means.  The
+only trick here was getting the color ramps to assign consistently and
+correctly.  Note the use of "arrange" to reorder the dataframes. Apparently,
+ggplot assigns colors in order of first appearance of a factor level.
+```{r}
+the_data %>% mutate(monthf = factor(month, levels = 1:12,
+                                   labels = c('Jan','Feb','Mar','Apr','May','Jun',
+                                              'Jul','Aug','Sep','Oct','Nov','Dec'))) %>% 
+  arrange(monthf) %>%
+  ggplot(aes(x =temperature, fill = monthf)) +
+  scale_fill_hue(aesthetics = c("colour", "fill")) +
+  geom_histogram(binwidth = 1, alpha = .5) +
+  geom_segment(data = monthmeans,
+               aes(x = meantemp, y = 1500,
+                   xend = meantemp, yend = 1300,
+                   color = monthf),
+               lwd = 2, arrow = arrow(length = unit(0.2,"cm"))) 
+
+```
+
+Presumably Depth is bimodal for similar reasons, but perhaps by tidal phase, 
+not day or month.
+
+Of course, the problem is that the tidal data does not follow any of the predictor time variables.  We would have to find successive high tides some how...
+
+# Logic for Finding the Time Since High Tide
+## Finding High tides in a Record of Water Depths
+We are searching for the highest tide within each 15 hour period, and if the
+central hour (hour 8 of 15) is the highest tide, we set `localmax` to TRUE.  We
+then pad `localmax` to be the same length as the source data, and use if to
+index into the source data and figure out what the depth was at that time.
+```{r}
+tmp <- the_data %>% filter(year == 2017, month == 6)
+
+localmax <- rollapply(tmp$depth, 15, function (x) which.max(x)==8, align = 'center')
+localmax <- c(rep(FALSE,7), localmax, c(rep(FALSE,7)))
+
+localmaxdatetime <- tmp$datetime[localmax]
+localmaxdepth    <- tmp$depth[localmax]
+
+ggplot() + geom_line(data = tmp, aes(x= datetime, y= depth) ) +
+  geom_point(aes(x=localmaxdatetime, y = localmaxdepth), color = 'yellow') +
+  scale_x_datetime()
+rm(tmp)
+```
+Pretty cool....
+
+## Finding Times Since Last High
+Now that I have a list of the hours nearest successive high tides, We need to 
+calculate how long ago the previous high tide was.  We demonstrate the logic 
+here using only data internal to the FOCB data, but the same logic can apply 
+working with NOAA tide data.  We use the same logic analyzing tidal
+relationships with our OA data.
+
+Here's a potentially useful function:
+```{r}
+findInterval(c(0, 1,2,3,4,5,6,7,8,9), c(2,4,6,8,10))
+```
+You might think `findInterval()` as a function that assigns
+values in the first list to bins defined in the second list.  You might, for
+example, use this to define categories or assign values to histogram bars.
+
+For our use, we put the list of all times in the first parameter, and the list
+of ONLY high tides in the second parameter, and the function will figure out
+which interval (defined by values in the second list) each value in the first
+list belongs to.  The function returns a list of the INDEXES of the "closest
+but smaller" value in the second list.
+
+```{r}
+localmax <- rollapply(the_data$depth, 15, function (x) which.max(x)==8, 
+                      align = 'center')
+localmax <- c(rep(FALSE,7), localmax, c(rep(FALSE,7)))
+the_data$hightide <- localmax     # Add a flag indicating high tides
+
+localmaxdatetime <- the_data$datetime[localmax]
+localmaxdepth    <- the_data$depth[localmax]
+
+localmaxdatetime <-  sort(localmaxdatetime)  #Not sure why this needed sorting
+                                             # It may reflect missing values?
+
+hightides <- tibble(thetime = localmaxdatetime, depth = localmaxdepth)
+```
+
+````{r}
+tideindexes <- findInterval(the_data$datetime, hightides$thetime)
+tideindexes[tideindexes == 0] = NA  # These occur before the first high tide
+head(tideindexes, 100)
+```
+
+Those are the only twelve `NA` values in the record.  There is one value
+for each time in the_data$datetime.
+```{r}
+sum(is.na(tideindexes))
+```
+
+```{r}
+tidetimes =  localmaxdatetime[tideindexes]
+head(tidetimes, 50)
+```
+
+```{r}
+the_data$sincehigh <- as.integer(difftime(the_data$datetime,
+                                          tidetimes,units = 'hours'))
+```
+
+How'd that work?
+```{r}
+tmp <- the_data %>% 
+  filter (year == 2017, month <6)
+
+ggplot(tmp, aes(sincehigh, depth, color = hightide)) + 
+  geom_point()
+```
+No interval since high tide should be over 13 hours, so we are looking at data
+with some impossible values.  They arise because we have some gaps in the data,
+creating spacews between high tides that are longer than 13 hours.  Those are not 
+meaningful values, but a result of limits in the source data.  They would not
+occur with consistent high tide times, as one can get from NOAA.
+
+# Clarifying the Code
+Let's apply that to the tides again.
+```{r}
+tmp <- the_data %>%
+  filter(year == 2017, month == 6)
+```
+
+```{r}
+h <- function(x) ifelse(any(is.na(x)), NA, which(x == max(x))==8)
+localmax <- rollapply(tmp$depth, 15, h, align = 'center')
+
+# Pad out the results of rollapply to match the inout vector in length and alignment
+localmax = c(rep(FALSE,7), localmax, c(rep(FALSE,7)))
+
+# Now, add datetime and depth to the data frame
+localmaxdatetime <- tmp$datetime[localmax]
+localmaxdatetime <- localmaxdatetime[!is.na(localmaxdatetime)]
+localmaxdepth <- tmp$depth[localmax]
+localmaxdepth <- localmaxdepth[!is.na(localmaxdepth)]
+```
+
+
+```{r}
+# finally, figure out when the previous high tide occurred
+# Identify the index of the previous high tide in `localmaxdatetime`
+tideindexes <- findInterval(tmp$datetime, localmaxdatetime)
+# Eliminate spurious values before the first high tide
+tideindexes[tideindexes== 0] = NA
+# Lookup the time that corresponds
+tidetimes =  localmaxdatetime[tideindexes]
+# Calculate a time difference
+tmp$sincehigh <- as.integer(difftime(tmp$datetime,tidetimes,units = 'hours'))
+# Any that are more than 13 hours after a high tide must be from a period where some data were missing.
+tmp$sincehigh[tmp$sincehigh>13]<- NA
+```
+
+```{r}
+ ggplot() + geom_line(data = tmp, aes(x= datetime, y= depth) ) +
+  geom_point(aes(x=localmaxdatetime, y = localmaxdepth), color = 'Red') +
+  scale_x_datetime()
+
+```
+
+Note that there are a couple of High tides, both early and late that we have not 
+picked out.  Those are periods with some missing data.
+
+# Constructing Draft Functions
+```{r}
+h <- function(x) ifelse(any(is.na(x)), NA, which(x == max(x))==8)
+
+findhightides <- function (dpth, datetime, windo = 15, fxn = h) {
+  #Find local maximum depths 
+  dpth     <- dpth[order(datetime)]
+  datetime <- datetime[order(datetime)]
+  localmax <- rollapply(dpth, windo, fxn, align = 'center')
+  #browser()
+  # Pad out the results of rollapply to match the input vector in length
+  # Does this need to use `floor()' instead of `as.integer()`?
+  # Should this be padded with `NA`?
+  localmax = c(rep(FALSE,(as.integer(windo/2))),
+                   localmax,
+                   rep(FALSE,(as.integer(windo/2)))
+                   )
+  
+  # Now, find corresponding datetime and depth
+  localmaxdatetime <- datetime[localmax]
+  localmaxdatetime <- localmaxdatetime[!is.na(localmaxdatetime)]
+  
+  localmaxdepth <- tmp$depth[localmax]
+  localmaxdepth <- localmaxdepth[!is.na(localmaxdepth)]
+  #Return columns
+  return(tibble(dt = localmaxdatetime,depth = localmaxdepth))
+}
+```
+
+```{r}
+tmp2 <- the_data %>% filter(year == 2017, month == 6)
+
+findhightides(tmp2$depth, tmp2$datetime)
+```
+
+```{r}
+sincehightide <- function (dpth, datetime, windo = 15, fxn = h) {
+  #Find local maximum depths 
+  tides <- findhightides(dpth, datetime)
+  
+  #figure out when the previous high tide occured
+  # Identify the index of the previous high tide in the tides dataframe
+  tideindexes <- findInterval(datetime, tides$dt)
+  # Eliminate spurious values before the first high tide
+  tideindexes[tideindexes== 0] <- NA
+  # Lookup the corresponding times.
+  tidetimes <-  tides$dt[tideindexes]
+  #Calculate time differences
+  sincehigh <- as.integer(difftime(datetime, tidetimes, units = 'hours'))
+  # Any that are more than 13 hours after a high tide must be from a period where some data were missing.
+  sincehigh[sincehigh>13]<- NA
+  return(sincehigh)
+}
+
+```
+
+
+```{r}
+sincehightide(tmp2$depth, tmp2$datetime)
+
+
+```
+
+
+```{r figure.width = 7}
+tmp2 <- tmp2 %>%
+  mutate(sincehigh = sincehightide(tmp2$depth, tmp2$datetime))
+
+ ggplot(tmp2, aes(x= datetime, y= depth, color = as.factor(sincehigh))) + 
+   geom_point() +
+   scale_color_discrete(name = "Hours Since\nHigh Tide") +
+  guides(color=guide_legend(ncol=2))
+  #scale_x_datetime()
+```
+
+
+
+
