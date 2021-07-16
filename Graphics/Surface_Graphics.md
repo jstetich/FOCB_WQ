@@ -27,6 +27,8 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
     -   [Revised Bar Chart Function](#revised-bar-chart-function)
     -   [Automating Limits](#automating-limits)
     -   [All Bar Plots](#all-bar-plots)
+-   [Separate Graphics](#separate-graphics)
+    -   [Redraw Secchi Graphic](#redraw-secchi-graphic)
 -   [Temperature / DO Graph](#temperature--do-graph)
 
 <img
@@ -689,6 +691,89 @@ bars line up vertically over the Station Names.
 
 Apparently the `egg`, `cowplot` and `patchwork` packages all have this
 capability.
+
+# Separate Graphics
+
+``` r
+for (pp in levels(factor(data_long$fancy_parm))) {   # Added `factor()` to avoid
+                                                     # extra plot for Percent 
+                                                     # Saturation
+  dat <- data_long %>%
+    filter(fancy_parm == pp)
+  
+  pp_jit <- ggplot(dat, aes(x = station_name, y = value)) +
+    geom_jitter(aes(color = bottom_flag), width = 0.3, height = 0, 
+                alpha = 0.15) +
+    stat_summary(fun.data = function(.x) median_hilow(.x, conf.int = .5),
+                 fill = cbep_colors()[3], color = "black",
+                 size = .4, shape = 22) +
+    xlab('') +
+    ylab(parse(text = pp)) +
+    
+    scale_color_manual(values = cbep_colors()[c(1,4)], 
+                       name = '', breaks = 'TRUE', label = 'Secchi On Bottom') +
+    scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
+    
+    theme_cbep(base_size = 12) +
+    theme(axis.text.x = element_text(angle = 90,
+                                     size = 8,
+                                     hjust = 1,
+                                     vjust = 0),
+          axis.ticks.length.x = unit(0, 'cm'),
+          axis.title.y = element_text(size = 9)) +
+    theme(legend.position = 'bottom') +
+    
+    guides(color = guide_legend(override.aes = list(size = 3, alpha = 0.5) ) )
+  print(pp_jit)
+  #ggsave(pp_jit, paste0('figures/', parameter, '.pdf', device = cairo_pdf, width = 4, height = 3))
+}
+```
+
+<img src="Surface_Graphics_files/figure-gfm/separate_graphics-1.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/separate_graphics-2.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/separate_graphics-3.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/separate_graphics-4.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/separate_graphics-5.png" style="display: block; margin: auto;" /><img src="Surface_Graphics_files/figure-gfm/separate_graphics-6.png" style="display: block; margin: auto;" />
+
+## Redraw Secchi Graphic
+
+It would be nice to have all graphic s similar in scale of the drawing
+area. `ggplot2` does not give us an easy way to control the size of the
+plot area precisely, but we can get close by trial and error:
+
+``` r
+dat <- data_long %>%
+  filter(parm == 'secchi_2')
+
+lab <- levels(factor(dat$fancy_parm))
+
+pp_jit <- ggplot(dat, aes(x = station_name, y = value)) +
+  geom_jitter(aes(color = bottom_flag), width = 0.3, height = 0, 
+              alpha = 0.15) +
+  stat_summary(fun.data = function(.x) median_hilow(.x, conf.int = .5),
+               fill = cbep_colors()[3], color = "black",
+               size = .4, shape = 22) +
+  xlab('') +
+  ylab(parse(text = lab)) +
+  
+  scale_color_manual(values = cbep_colors()[c(1,4)], 
+                     name = '', breaks = 'TRUE', label = 'Secchi On Bottom') +
+  scale_y_continuous (breaks = my_breaks_fxn, labels = my_label_fxn) +
+  
+  theme_cbep(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 90,
+                                   size = 8,
+                                   hjust = 1,
+                                   vjust = 0),
+        axis.ticks.length.x = unit(0, 'cm'),
+        axis.title.y = element_text(size = 9)) +
+  theme(legend.position = 'bottom') +
+  
+  guides(color = guide_legend(override.aes = list(size = 3, alpha = 0.5) ) )
+pp_jit
+```
+
+<img src="Surface_Graphics_files/figure-gfm/redraw_secchi-1.png" style="display: block; margin: auto;" />
+
+``` r
+  #ggsave(pp_jit, paste0('figures/secchi.pdf', device = cairo_pdf, width = 4, height = 4))
+```
 
 # Temperature / DO Graph
 
