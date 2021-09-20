@@ -634,9 +634,10 @@ for (pp in levels(factor(data_long$fancy_parm))) {   # Added `factor()` to avoid
 ```
 
 ## Redraw Secchi Graphic
-It would be nice to have all graphic s similar in scale of the drawing area.
+It would be nice to have all graphics similar in the scale of the drawing area.
 `ggplot2` does not give us an easy way to control the size of the plot area
-precisely, but we can get close by trial and error:
+precisely.  Several packages provide more control, but we can also get close 
+by trial and error.  The following is close  enough for use in PowerPoint.
 ```{r redraw_secchi, fig.width = 4, fig.height = 3.75}
 dat <- data_long %>%
   filter(parm == 'secchi_2')
