@@ -45,7 +45,7 @@ these analyses are presented in the “Surface\_Analysis\_Trends.md”
 RNotebook.
 
 In developing those analyses, we ran into a problem generating usable
-graphics for State of Casco BAy, when the Y axis is a transformed
+graphics for State of Casco Bay, when the Y axis is a transformed
 variable.
 
 # Load Libraries
