@@ -452,7 +452,7 @@ plus one transformed chlorophyll data.
 
 # Options for More Complex Models
 
-We could in principal adjust models for different sampling histories
+We could in principle adjust models for different sampling histories
 (years and months) but there is likely little value to doing so as the
 sampling histories are fairly uniform, with the exception of a few sites
 added recently.
