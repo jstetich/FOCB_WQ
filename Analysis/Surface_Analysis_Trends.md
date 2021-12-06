@@ -1029,7 +1029,7 @@ for (p in nested_data$parameter) {
 -   Salinity shows slightly lower salinity in spring, and higher
     salinity in the fall.
 
--   Dissolved oxygen shown no strong long-term trend.
+-   Dissolved oxygen shows no strong long-term trend.
 
 -   Percent Saturation shows a complex pattern, with evidence for higher
     percent saturation in recent years, with a change in the early
@@ -1058,7 +1058,7 @@ chlorophyll.
 
 That suggests we might analyze separate seasonal trends.
 
-# Impact of Unevean Sampling On Chlorophyll Models
+# Impact of Uneven Sampling On Chlorophyll Models
 
 We focus here on the the impact of whether we look at all chlorophyll
 data or only data from the three long-term chlorophyll sites. We look at
@@ -1336,7 +1336,7 @@ for (p in nested_data$parameter) {
     fit interaction terms, although they are important for several of
     these models, as shown above.
 
--   Dissolved oxygen and pH show limited evidence of a trends over time.
+-   Dissolved oxygen and pH show limited evidence of a trend over time.
     What trends we found for pH were confounded with seasonal patterns.
     Interestingly, percent saturation DOES show a statistically
     detectable long-term trend even though DO does not.
