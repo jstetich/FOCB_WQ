@@ -1,6 +1,6 @@
 # Friends of Casco Bay Water Quality Monitoring Data
 
-All data received in email from Mike Doan, of Friends of Casco Bay to Curtis C. Bohlen., of Casco Bay Estuary Partnership, as follows:
+All data received in email from Mike Doan, of Friends of Casco Bay to Curtis C. Bohlen, of Casco Bay Estuary Partnership, as follows:
 
 ## Received June 19, 2018
 FOCB Citizen Steward 2016_2017FINAL.xlsx
