@@ -271,7 +271,7 @@ years.
 
 There are several modeling strategies possible here, including quadratic
 models, piecewise linear models, or GAM models. WE focus initially on
-quatratic models and gam models, always in a hierarchical model context.
+quadratic models and gam models, always in a hierarchical model context.
 These hierarchical models treat stations as random factors. We explore
 both models that also treat Years as random factors and models that do
 not.
@@ -361,7 +361,7 @@ chose not to further explore that term via analysis of AIC, ecause tere
 are other questions of model form that may hav a larger impact on
 results.
 
-First, lets drop the idea that year to year variation is in part random.
+First, let's drop the idea that year to year variation is in part random.
 This has the effect of treating each observation as independent, rather
 than assuming that measurements collected within one year are
 correlated.
