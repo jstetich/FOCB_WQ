@@ -99,12 +99,12 @@ ggplot(aes(Time, row)) + geom_point()
 
 <img src="FOCB-Continuous-Time-and-Tide_files/figure-gfm/unnamed-chunk-2-1.png" style="display: block; margin: auto;" />
 
-Some Times are bare times, with the Excel default “Year zero” in the
+Some times are bare times, with the Excel default “Year zero” in the
 early 1900s. Others are complete dates and times.
 
 ## Add Manually Created Times
 
-We Create two Date Time values from the Month, Year, Day and Hour
+We create two Date Time values from the Month, Year, Day and Hour
 Columns, with different assumptions about timezone. We compare them to
 the datetime column (originally “date”) to see what’s going on. That
 allows us to evaluate what time coordinates were used. The challenge
@@ -156,8 +156,8 @@ Aragonite, Dimensionless \| \| \|—————–\|————————-\|
 # Evaluating Time Coordinates
 
 There has been some ambiguity in the past about how datetimes were
-created by FOCB. We checkher eto confirm that those problems have been
-respolved
+created by FOCB. We check here to confirm that those problems have been
+resolved
 
 ## Common Timezone Names for Reference
 
@@ -298,7 +298,7 @@ more than an hour and one minute apart). We find about 27 gaps in the
 data, where data is missing for a few hours. We show both the record
 immediately before the gap and immediately after the gap.
 
-Many gaps appear to start at midnight, and so may reflect dat aQA/QC
+Many gaps appear to start at midnight, and so may reflect at aQA/QC
 practices.
 
 ``` r
@@ -364,7 +364,7 @@ monthmeans <- the_data %>%
   filter(! is.na(month))
 ```
 
-WE plot against time shifted by six hours, so the value of zero is six
+We plot against time shifted by six hours, so the value of zero is six
 a.m, which should be about the coolest time of day.
 
 ``` r
@@ -391,7 +391,7 @@ long periods of the year that are relatively warm (July, August and
 September) and relatively cold (Latter half of December, January,
 February, March).
 
-Lets try to color code by month, and add markers for the monthly means.
+Let's try to color code by month, and add markers for the monthly means.
 The only trick here was getting the color ramps to assign consistently
 and correctly. Note the use of “arrange” to reorder the dataframes.
 Apparently, ggplot assigns colors in order of first appearance of a
@@ -562,7 +562,7 @@ ggplot(tmp, aes(sincehigh, depth, color = hightide)) +
 <img src="FOCB-Continuous-Time-and-Tide_files/figure-gfm/unnamed-chunk-26-1.png" style="display: block; margin: auto;" />
 No interval since high tide should be over 13 hours, so we are looking
 at data with some impossible values. They arise because we have some
-gaps in the data, creating spacews between high tides that are longer
+gaps in the data, creating spaces between high tides that are longer
 than 13 hours. Those are not meaningful values, but a result of limits
 in the source data. They would not occur with consistent high tide
 times, as one can get from NOAA.
