@@ -35,7 +35,7 @@ Curtis C. Bohlen, Casco Bay Estuary Partnership
 # Introduction
 
 This Notebook reviews contents of the data received from FOCB’s
-“’Citizen Stewards”Surface" data.
+“Citizen Stewards” Surface data.
 
 This reflects only a small portion of FOCB’s monitoring activity.
 
