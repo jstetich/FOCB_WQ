@@ -225,7 +225,7 @@ length(unique(trend_data$station))
 
 We are reduced to only 17 stations with long-term records for trend
 analysis. We noted above that we have limited chlorophyll data before
-the last couple of years. We address that momentarily
+the last couple of years. We address that momentarily.
 
 # Construct Nested Tibble
 
@@ -512,7 +512,7 @@ For State of Casco Bay, however, the month by month models are
 problematic to depict for a non-technical audience.
 
 So the choice of models comes down to a trade-off between model
-performance and clarity fo the State of Casco Bay audience. We need the
+performance and clarity for the State of Casco Bay audience. We need the
 interaction-based models, at least for some parameters.
 
 **Full Model** Too complicated to depict clearly. Eight independent
