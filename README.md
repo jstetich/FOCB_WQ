@@ -14,7 +14,7 @@ This archive focuses on a handful of conventional water quality parameters,
 including temperature, salinity, pH, dissolved oxygen, Secchi depth and 
 chlorophyll a.
 
-Related data from FOCB on nutrietns and ocean acidification were analyzed in
+Related data from FOCB on nutrients and ocean acidification were analyzed in
 other data archives.
 
 # Statement of Purpose
