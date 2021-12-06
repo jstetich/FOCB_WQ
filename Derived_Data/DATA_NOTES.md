@@ -5,7 +5,7 @@
 change is the addition of a column containing shorter names for FOCB
 sampling locations, for use in SoCB.
 
-"focb_monitoring_imperv.csv" contians results of GIS analysis of 
+"focb_monitoring_imperv.csv" contains results of GIS analysis of 
 impervious cover in proximity to FOCB monitoring locations. Details are
 provided in the data notes in the GIS folder.
 
